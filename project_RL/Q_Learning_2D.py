@@ -182,7 +182,7 @@ def train(episode):
 
     for e in range(episode):
         start = time.time()
-        epsilon = 10 / (e + 1)
+        epsilon = 3 / (e + 1)
 
         action = np.random.randint(0, 9)
         s_t, reward = envir.run_one_step(action)
@@ -212,10 +212,9 @@ def train(episode):
         reset_pos()
         print(reward_list)
         plt.plot(reward_list)
-        file_name = '/img' + str(episode) + '.png'
+        file_name = './img' + str(e) + '.png'
         plt.savefig(file_name)
 
 
 if __name__ == '__main__':
-    train(episode = 100)
-    
+    train(episode = 20)
