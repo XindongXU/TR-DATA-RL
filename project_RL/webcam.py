@@ -14,28 +14,14 @@ def webcamera():
 
         hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
         mask = cv2.inRange(hsv, lower_green, upper_green)
-        edges = cv2.Canny(mask, 100, 200)
-        cv2.imshow('green edges', edges)
+        # edges = cv2.Canny(mask, 100, 200)
+        cv2.imshow('green mask', mask)
 
-        # detection of the green part in the video
-        # pointdetected = cv2.cvtColor(src = frame, code = cv2.COLOR_BGR2RGB)
-        # cv2.imshow('pointdetected', pointdetected)
-
-        # change to hsv model and get mask
-        # hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-        # mask = cv2.inRange(hsv, lower_blue, upper_blue)
-        # cv2.imshow('mask', mask)
-        
-        # # detect blue
-        # res = cv2.bitwise_and(frame, frame, mask = mask)
-        # cv2.imshow('Result', res)
-        
-        
-        # press escape to exit
         if (cv2.waitKey(30) == 27):
             break
 
     cap.release()
     cv2.destroyAllWindows()
 
-# webcamera()
+if __name__ == '__main__':
+    webcamera()

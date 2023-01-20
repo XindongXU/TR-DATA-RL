@@ -44,13 +44,35 @@ def key_received(key):
     if key.keyname.endswith('Axis 4'):
         servo_1_value = -key.value if abs(key.value) > 0.05 else 0
 
-
 def random_target():
     value = np.random.uniform(-1, 1)
     return value if abs(value) > 0.05 else 0
 
 def clamp(x, lo, hi):
     return max(lo, min(hi, x))
+
+def mask_detect():
+    # set green thresh
+    lower_green = np.array([35,70,60])
+    upper_green = np.array([120,255,255])
+
+    cap = cv2.VideoCapture(0)
+    ret, frame = cap.read()
+
+    if ret :
+        frame = cv2.resize(frame, None, fx = 1, fy = 1, interpolation = cv2.INTER_AREA)
+        # cv2.imshow('frame', frame)
+
+        hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+        mask = cv2.inRange(hsv, lower_green, upper_green)
+        # edges = cv2.Canny(mask, 100, 200)
+        # cv2.imshow('green edges0', edges)
+
+    cap.release()
+    # cv2.destroyAllWindows()
+    # print('mask returned')
+
+    return mask
 
 def top_detection(mask):
     global s_0, s_1
@@ -76,6 +98,7 @@ def top_detection(mask):
     else:
         s_0.append(np.array(greenpos0).reshape(-1, 1)[inlier_mask][0,0])
         s_1.append(np.array(greenpos1).reshape(-1, 1)[inlier_mask][0,0])
+    print(s_0[-1], s_1[-1])
 
 
 def thread_fn():
@@ -90,7 +113,7 @@ def thread_fn():
     ser.write(f'{int(servo_0_target) << 1}\n{(int(servo_1_target) << 1) + 1}\n'.encode())
     time.sleep(2)
 
-    ## detection of top point at s_t
+    ## detection of top point at s_0
     mask = mask_detect()
     top_detection(mask)
 
@@ -100,7 +123,7 @@ def thread_fn():
     old_time = time.time()
     start_t  = old_time
 
-    while (old_time - start_t < 1500):
+    while (old_time - start_t < 10):
         print(old_time - start_t)
         new_time = time.time()
         # delta_time = new_time - old_time
@@ -134,29 +157,6 @@ def thread_fn():
     return np.array([servo_0_pos, servo_1_pos]), np.array([action_0, action_1]), np.array([s_0, s_1])
     # print(servo_0, servo_1)
 
-def mask_detect():
-    # set green thresh
-    lower_green = np.array([35,70,60])
-    upper_green = np.array([120,255,255])
-
-    cap = cv2.VideoCapture(0)
-    ret, frame = cap.read()
-
-    if ret :
-        frame = cv2.resize(frame, None, fx = 1, fy = 1, interpolation = cv2.INTER_AREA)
-        # cv2.imshow('frame', frame)
-
-        hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-        mask = cv2.inRange(hsv, lower_green, upper_green)
-        # edges = cv2.Canny(mask, 100, 200)
-        # cv2.imshow('green edges0', edges)
-
-    cap.release()
-    # cv2.destroyAllWindows()
-    # print('mask returned')
-
-    return mask
-
 
 def thread_run():
     communication_thread = Thread(target=thread_fn)
@@ -181,7 +181,7 @@ if __name__ == '__main__':
 
     plt.figure(figsize = (6, 8))
     plt.xlim((0, 480))
-    plt.ylim((0, 640))
+    plt.ylim((0, 680))
     # plt.plot(s_t[0], s_t[1])
     plt.scatter(s_t[0], s_t[1], s = 20, marker = 'x')
 
@@ -192,7 +192,7 @@ if __name__ == '__main__':
     plt.scatter(Servo_t[0], Servo_t[1], s = 20, marker = 'x')
     plt.show()
 
-    with open('/home/mig5/Desktop/project_RL/data.npy', 'wb') as f:
+    with open('./data.npy', 'wb') as f:
         np.save(f, Servo_t)
         np.save(f, A_t)
         np.save(f, s_t)
