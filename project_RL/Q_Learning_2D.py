@@ -10,6 +10,50 @@ from sklearn import linear_model
 import matplotlib.pyplot as plt
 from reset_position import reset_pos
 
+def mask_detect():
+        # set green thresh
+        lower_green = np.array([35,70,60])
+        upper_green = np.array([120,255,255])
+
+        cap = cv2.VideoCapture(0)
+        ret, frame = cap.read()
+
+        if ret :
+            frame = cv2.resize(frame, None, fx = 1, fy = 1, interpolation = cv2.INTER_AREA)
+
+            hsv  = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+            mask = cv2.inRange(hsv, lower_green, upper_green)
+            # edges = cv2.Canny(mask, 100, 200)
+        cap.release()
+        return mask
+
+def top_detection(mask, s_0, s_1):
+    greenpos0 = []
+    greenpos1 = []
+    for (index0,liste) in enumerate(mask):
+        for (index1,value) in enumerate(liste):
+            if value == 255:
+                greenpos0.append(index0)
+                greenpos1.append(index1)
+
+    ransac = linear_model.RANSACRegressor()
+    ransac.fit(np.array(greenpos0).reshape(-1, 1), np.array(greenpos1).reshape(-1, 1))
+    inlier_mask = ransac.inlier_mask_
+
+    top1 = np.linalg.norm((np.array(greenpos0).reshape(-1, 1)[inlier_mask][-1,0], np.array(greenpos1).reshape(-1, 1)[inlier_mask][-1,0]))
+    top2 = np.linalg.norm((np.array(greenpos0).reshape(-1, 1)[inlier_mask][0,0], np.array(greenpos1).reshape(-1, 1)[inlier_mask][0,0]))
+
+    if top1 > top2 :
+        s_0.append(np.array(greenpos0).reshape(-1, 1)[inlier_mask][-1,0])
+        s_1.append(np.array(greenpos1).reshape(-1, 1)[inlier_mask][-1,0])
+    else:
+        s_0.append(np.array(greenpos0).reshape(-1, 1)[inlier_mask][0,0])
+        s_1.append(np.array(greenpos1).reshape(-1, 1)[inlier_mask][0,0])
+
+def eval_reward(s_pos, target_pos):
+    # reward(s_t[:, 0], s_t[:, 1])
+    reward = np.linalg.norm(s_pos - target_pos)
+    return -reward
 
 class Qtable:
     
@@ -81,62 +125,13 @@ class environment:
             st_decode.append(id)
         return np.array(st_decode)
 
-    def mask_detect():
-        # set green thresh
-        lower_green = np.array([35,70,60])
-        upper_green = np.array([120,255,255])
-
-        cap = cv2.VideoCapture(0)
-        ret, frame = cap.read()
-
-        if ret :
-            frame = cv2.resize(frame, None, fx = 1, fy = 1, interpolation = cv2.INTER_AREA)
-
-            hsv  = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-            mask = cv2.inRange(hsv, lower_green, upper_green)
-            # edges = cv2.Canny(mask, 100, 200)
-        cap.release()
-        # cv2.destroyAllWindows()
-        # print('mask returned')
-        return mask
-
-    def top_detection(mask):
-        global s_0, s_1
-
-        greenpos0 = []
-        greenpos1 = []
-        for (index0,liste) in enumerate(mask):
-            for (index1,value) in enumerate(liste):
-                if value == 255:
-                    greenpos0.append(index0)
-                    greenpos1.append(index1)
-
-        ransac = linear_model.RANSACRegressor()
-        ransac.fit(np.array(greenpos0).reshape(-1, 1), np.array(greenpos1).reshape(-1, 1))
-        inlier_mask = ransac.inlier_mask_
-
-        top1 = np.linalg.norm((np.array(greenpos0).reshape(-1, 1)[inlier_mask][-1,0], np.array(greenpos1).reshape(-1, 1)[inlier_mask][-1,0]))
-        top2 = np.linalg.norm((np.array(greenpos0).reshape(-1, 1)[inlier_mask][0,0], np.array(greenpos1).reshape(-1, 1)[inlier_mask][0,0]))
-
-        if top1 > top2 :
-            s_0.append(np.array(greenpos0).reshape(-1, 1)[inlier_mask][-1,0])
-            s_1.append(np.array(greenpos1).reshape(-1, 1)[inlier_mask][-1,0])
-        else:
-            s_0.append(np.array(greenpos0).reshape(-1, 1)[inlier_mask][0,0])
-            s_1.append(np.array(greenpos1).reshape(-1, 1)[inlier_mask][0,0])
-
-    def eval_reward(s_pos, target_pos):
-        # reward(s_t[:, 0], s_t[:, 1])
-        reward = np.linalg.norm(s_pos - target_pos)
-        return reward
-
     def clamp(x, lo, hi):
         return max(lo, min(hi, x))
         
     def run_one_step(self, action):
         # perform action chosen, return new state info, reward and other info
 
-        speed = 20
+        speed = 60
         ser = serial.Serial('/dev/ttyACM0')
 
         self.servo_0_value = 0.1 * (-1 + action//3)
@@ -145,8 +140,8 @@ class environment:
         self.servo_0_target = self.servo_0_target + speed * self.servo_0_value * 1
         self.servo_1_target = self.servo_1_target + speed * self.servo_1_value * 1
 
-        self.servo_0_target = self.clamp(self.servo_0_target, 0, 180)
-        self.servo_1_target = self.clamp(self.servo_1_target, 0, 180)
+        self.servo_0_target = max(0, min(180, self.servo_0_target))
+        self.servo_1_target = max(0, min(180, self.servo_1_target))
 
         self.servo_0_pos.append(self.servo_0_target)
         self.servo_1_pos.append(self.servo_1_target)
@@ -155,15 +150,20 @@ class environment:
 
         print(f'\r {self.servo_0_target:.2f} {self.servo_1_target:.2f}')
         ser.write(f'{int(self.servo_0_target) << 1}\n{(int(self.servo_1_target) << 1) + 1}\n'.encode())
-        time.sleep(1)
+        time.sleep(0.2)
 
         ## detection of top point at s_t
-        mask = self.mask_detect()
-        self.top_detection(mask)
+        mask = mask_detect()
+        top_detection(mask, self.s_0, self.s_1)
 
-        s_t = np.array([s_0[-1], s_1[-1]])
+        s_t = np.array([self.s_0[-1], self.s_1[-1]])
+        # print("target position =", self.__decode(self.target_pos), self.target_pos)
+        # print("ourarm position =", self.__decode(s_t), s_t)
+
         s_t = self.__decode(s_t)
-        reward = self.eval_reward(s_t, self.__decode(self.target_pos))
+        reward = eval_reward(s_t, self.__decode(self.target_pos))
+        
+        # print("current reward  =", reward)
 
         return s_t, reward
 
@@ -174,21 +174,23 @@ def train(episode):
     state_num  = 2
     Q_table = Qtable(action_num, state_num, s_split_num)
 
-    low  = [80, 191]
-    high = [411, 568]
-    envir = environment(low=low, high=high, s_split_num=s_split_num)
+    low  = [0, 300]
+    high = [480, 640]
+    target_pos = np.array([20, 520])
+    reward_list = []
+    envir = environment(low=low, high=high, s_split_num=s_split_num, target_pos = target_pos)
 
     for e in range(episode):
         start = time.time()
         epsilon = 10 / (e + 1)
 
-        action = 9
+        action = np.random.randint(0, 9)
         s_t, reward = envir.run_one_step(action)
-        step_num = 10000
+        step_num = 100
 
         while step_num:
             if np.random.random() <= epsilon:
-                action = np.random.randint(0, 10)
+                action = np.random.randint(0, 9)
             else:
                 action = Q_table.get_best_action(s_t)
             
@@ -198,7 +200,9 @@ def train(episode):
             Q_table.update(state_decode=s_t, action=action, reward=reward, 
                            lr=0.5, GAMMA=0.99, max_q_next=max_q_next)
             s_t = s_t1
+            reward_list.append(reward)
             step_num -= 1
+            print(step_num)
         
         end = time.time()
         print('Episode:{0:d}'.format(e),
@@ -206,7 +210,12 @@ def train(episode):
               '    reward:{0:4f}'.format(reward),
               )
         reset_pos()
+        print(reward_list)
+        plt.plot(reward_list)
+        file_name = '/img' + str(episode) + '.png'
+        plt.savefig(file_name)
 
 
 if __name__ == '__main__':
     train(episode = 100)
+    

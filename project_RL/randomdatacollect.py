@@ -181,7 +181,7 @@ if __name__ == '__main__':
 
     plt.figure(figsize = (6, 8))
     plt.xlim((0, 480))
-    plt.ylim((0, 680))
+    plt.ylim((0, 640))
     # plt.plot(s_t[0], s_t[1])
     plt.scatter(s_t[0], s_t[1], s = 20, marker = 'x')
 

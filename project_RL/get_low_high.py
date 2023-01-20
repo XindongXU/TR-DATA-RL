@@ -68,7 +68,8 @@ def get_high():
 
 def get_min_max():
     
-    low_pos, high_pos = get_low(), get_high()
+    low_pos  = get_low()
+    high_pos = get_high()
     print(low_pos, high_pos)
     return np.array([min(low_pos[0], high_pos[0]), min(low_pos[1], high_pos[1])]), np.array([max(low_pos[0], high_pos[0]), max(low_pos[1], high_pos[1])])
 
