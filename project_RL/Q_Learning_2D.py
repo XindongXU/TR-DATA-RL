@@ -20,7 +20,6 @@ def mask_detect():
 
         if ret :
             frame = cv2.resize(frame, None, fx = 1, fy = 1, interpolation = cv2.INTER_AREA)
-
             hsv  = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
             mask = cv2.inRange(hsv, lower_green, upper_green)
             # edges = cv2.Canny(mask, 100, 200)
@@ -169,13 +168,13 @@ class environment:
 
 def train(episode):
 
-    s_split_num = 50
+    s_split_num = 20
     action_num = 9
     state_num  = 2
     Q_table = Qtable(action_num, state_num, s_split_num)
 
-    low  = [0, 300]
-    high = [480, 640]
+    low  = [50, 300]
+    high = [400, 600]
     target_pos = np.array([20, 520])
     reward_list = []
     envir = environment(low=low, high=high, s_split_num=s_split_num, target_pos = target_pos)
@@ -209,11 +208,16 @@ def train(episode):
               '    time:{0:.4f}'.format(end-start),
               '    reward:{0:4f}'.format(reward),
               )
-        reset_pos()
+
+        # reset_pos()
         print(reward_list)
         plt.plot(reward_list)
         file_name = './img' + str(e) + '.png'
         plt.savefig(file_name)
+
+    with open('./reward_data.npy', 'wb') as f:
+        np.save(f, reward_list)
+        np.save(f, Q_table)
 
 
 if __name__ == '__main__':
