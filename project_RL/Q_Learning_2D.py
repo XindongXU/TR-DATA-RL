@@ -168,7 +168,7 @@ class environment:
 
 def train(episode):
 
-    s_split_num = 20
+    s_split_num = 50
     action_num = 9
     state_num  = 2
     Q_table = Qtable(action_num, state_num, s_split_num)
