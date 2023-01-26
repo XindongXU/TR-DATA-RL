@@ -5,7 +5,7 @@ from sklearn import linear_model
 cap = cv2.VideoCapture(0)
 
 lower_green = np.array([45,70,60])
-upper_green = np.array([90,255,200])
+upper_green = np.array([90,255,255])
 
 def top_detection(mask):
     greenpos0 = []
@@ -54,6 +54,7 @@ while True:
     pointmask = np.zeros((480, 640, 3))
     pointmask[:, :, 1] = mask
     top0, top1 = top_detection(mask)
+    print(top0, top1)
     # mask = mask/2
     # # print(np.shape(frame))
     # # print(top0, top1)
