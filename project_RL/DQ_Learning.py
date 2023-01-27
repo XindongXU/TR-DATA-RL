@@ -69,7 +69,7 @@ def top_detection(mask):
     return x, y
 
 def eval_reward(s_pos, target_pos):
-    reward = np.linalg.norm(s_pos - target_pos)
+    reward = np.linalg.norm(np.array(s_pos) - np.array(target_pos))
     return -reward
 
 class DQNet(tf.keras.Model):
@@ -88,15 +88,16 @@ class DQNet(tf.keras.Model):
         #     activation=tf.nn.relu)
         # self.pool2 = tf.keras.layers.MaxPool2D(pool_size=[2, 2], strides=2)
         # self.flatten = tf.keras.layers.Flatten(input_shape=(5))
-        self.dense1 = tf.keras.layers.Dense(128, activation=tf.nn.relu)
-        self.dense2 = tf.keras.layers.Dense(64, activation=tf.nn.relu)
-        self.dense3 = tf.keras.layers.Dense(1)
+        self.dense1 = tf.keras.layers.Dense(64, activation = tf.nn.tanh)
+        self.dense2 = tf.keras.layers.Dense(16, activation = tf.nn.tanh)
+        self.dense3 = tf.keras.layers.Dense(4, activation = tf.nn.tanh)
+        self.dense4 = tf.keras.layers.Dense(1)
 
     def call(self, inputs):
         # x = self.flatten(inputs)
-        x = self.dense1(inputs)
-        x = self.dense2(x)
+        x = self.dense2(inputs)
         x = self.dense3(x)
+        x = self.dense4(x)
         output = x
         return output
     
@@ -105,15 +106,15 @@ class DQNet(tf.keras.Model):
         inputs = tf.constant([[state_current[0], state_current[1], 
                                target_pos[0], target_pos[1], 
                                action]])
-        value = self.call(inputs = inputs)
+        value = self.call(inputs = inputs).numpy()[0][0]
         
         for i in range(8):
             inputs = tf.constant([[state_current[0], state_current[1], 
                                target_pos[0], target_pos[1], 
                                i + 2]])
 
-            value_new = self.call(inputs = inputs)
-            if value < value_new:
+            value_new = self.call(inputs = inputs).numpy()[0][0]
+            if value <= value_new:
                 value = value_new
                 action = i + 2
         return action if get_action else value
@@ -165,7 +166,7 @@ class environment:
         mask = mask_detect()
         top_x, top_y = top_detection(mask)
 
-        state_next = np.array([top_x, top_y])
+        state_next = [top_x, top_y]
         # print("target position =", self.__decode(self.target_pos), self.target_pos)
         # print("ourarm position =", self.__decode(s_t), s_t)
 
@@ -192,30 +193,33 @@ def train(episode, target_pos_list):
     
     replay_memory = []
     memory_size = 10000
-    minibatch_size = 100
-    gamma = 0.99
+    minibatch_size = 500
+    gamma = 0.95
     
     reward_list = []
     envir = environment()
     DQL = DQNet()
+    DQL.compile(optimizer = tf.keras.optimizers.SGD(learning_rate = 0.0001),
+                loss = tf.keras.losses.MeanSquaredError(),
+                metrics = 'mae')
     
     for e in range(episode):
-
-        target_pos = target_pos_list[np.random.randint(0, len(target_pos_list))]
+        target_idx = np.random.randint(0, len(target_pos_list))
+        target_pos = [target_pos_list[target_idx][0], target_pos_list[target_idx][1]]
         start = time.time()
-        epsilon = 5 / (e + 1)
+        epsilon = 6 / (e + 1)
         step_num = 100
 
         # detection of initial state, randomize first action, memorize first sequence
         mask = mask_detect()
         action = np.random.randint(1, 10)
-        s_c = np.array(top_detection(mask))
+        s_c = top_detection(mask)
         s_n, reward = envir.run_one_step(s_c, target_pos, action)
         save_memory(replay_memory, memory_size, s_c, target_pos, action, reward, s_n)
 
         while step_num:
-            target_pos = target_pos_list[np.random.randint(0, len(target_pos_list))]
-
+            target_idx = np.random.randint(0, len(target_pos_list))
+            target_pos = [target_pos_list[target_idx][0], target_pos_list[target_idx][1]]
             s_c = s_n
             if np.random.random() <= epsilon:
                 action = np.random.randint(1, 10)
@@ -230,19 +234,29 @@ def train(episode, target_pos_list):
                 x_train, y_train = [], []
                 minibatch = GetMinibatch(minibatch_size, replay_memory)
                 for (i, mini) in enumerate(minibatch):
-                    value_ = DQL.get_best(mini[4], mini[1], get_action = False)
-                    y_train.append(mini[3] + gamma*value_)
+                    if mini[3] >= -10:
+                        y_train.append(mini[3])
+                    else :
+                        value_ = DQL.get_best(mini[4], mini[1], get_action = False)
+                        y_train.append(mini[3] + gamma*value_)
                     x_train.append([mini[0][0], mini[0][1], mini[1][0], mini[1][1], mini[2]])
 
-                DQL.compile(optimizer = tf.keras.optimizers.SGD(learning_rate = 0.001),
-                            loss = tf.keras.losses.MeanAbsoluteError(),
-                            metrics = 'mae')
+                # if e == 10:
+                #     learning_rate = 0.0001
+                #     DQL.compile(optimizer = tf.keras.optimizers.SGD(learning_rate = learning_rate),
+                #                 loss = tf.keras.losses.MeanAbsoluteError(),
+                #                 metrics = 'mse')
 
                 DQL.fit(np.array(x_train), np.array(y_train),
-                        batch_size = 64, #每一批batch的大小为32，
-                        epochs = 600,)
+                        # batch_size = 100, #每一批batch的大小为32，
+                        epochs = 300,)
                         # validation_split = 0.2, #从数据集中划分20%给测试集
                         # validation_freq = 20)
+
+                DQL.save_weights('/home/mig5/Desktop/TR_DATA_RL/project_RL/deepqlearning_model')
+                # np.save('minibatch', minibatch)
+                # print(minibatch)
+
 
             reward_list.append(reward)
             step_num -= 1
@@ -259,10 +273,6 @@ def train(episode, target_pos_list):
         plt.plot(reward_list)
         file_name = './deep_img' + str(e) + '.png'
         plt.savefig(file_name)
-
-        with open('./reward_data.npy', 'wb') as f:
-            np.save(f, reward_list)
-            # np.save(f, Q_table)
 
 
 if __name__ == '__main__':
