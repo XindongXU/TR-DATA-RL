@@ -229,7 +229,7 @@ def train(episode):
                 x_train, y_train = [], []
                 minibatch = GetMinibatch(minibatch_size, replay_memory)
                 for (i, mini) in enumerate(minibatch):
-                    value_ = DQL.get_best(mini[3], target_pos, get_action = True)
+                    value_ = DQL.get_best(mini[3], target_pos, get_action = False)
                     y_train.append(mini[2] + gamma*value_)
                     x_train.append([mini[0][0], mini[0][1], target_pos[0], target_pos[1], mini[1]])
 

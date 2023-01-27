@@ -68,8 +68,7 @@ def top_detection(mask):
         y = np.array(greenpos1).reshape(-1, 1)[inlier_mask][0,0]
     return x, y
 
-def eval_reward(s_pos):
-    global target_pos
+def eval_reward(s_pos, target_pos):
     reward = np.linalg.norm(s_pos - target_pos)
     return -reward
 
@@ -135,7 +134,7 @@ class environment:
     def clamp(x, lo, hi):
         return max(lo, min(hi, x))
         
-    def run_one_step(self, state, action):
+    def run_one_step(self, state, target_pos, action):
         # perform action chosen, return new state info, reward and other info
         # action at = 0, 1, 2...
         speed = 100
@@ -170,13 +169,13 @@ class environment:
         # print("target position =", self.__decode(self.target_pos), self.target_pos)
         # print("ourarm position =", self.__decode(s_t), s_t)
 
-        reward_current = eval_reward(state_next)
+        reward_current = eval_reward(state_next, target_pos)
         print("current reward  =", reward_current)
 
         return state_next, reward_current
 
-def save_memory(replay_memory, memory_size, state_current, action_current, reward_current, state_next):
-    replay_memory.append([state_current, action_current, reward_current, state_next])
+def save_memory(replay_memory, memory_size, state_current, target_pos, action_current, reward_current, state_next):
+    replay_memory.append([state_current, target_pos, action_current, reward_current, state_next])
 
     if len(replay_memory) > memory_size:
         replay_memory.popleft()
@@ -189,10 +188,8 @@ def GetMinibatch(minibatch_size, replay_memory):
     
 
 
-def train(episode):
-    global target_pos
-    target_pos = np.array([229, 567])
-
+def train(episode, target_pos_list):
+    
     replay_memory = []
     memory_size = 10000
     minibatch_size = 100
@@ -203,35 +200,39 @@ def train(episode):
     DQL = DQNet()
     
     for e in range(episode):
+
+        target_pos = target_pos_list[np.random.randint(0, len(target_pos_list))]
         start = time.time()
-        epsilon = 2 / (e + 1)
+        epsilon = 5 / (e + 1)
         step_num = 100
 
         # detection of initial state, randomize first action, memorize first sequence
         mask = mask_detect()
         action = np.random.randint(1, 10)
         s_c = np.array(top_detection(mask))
-        s_n, reward = envir.run_one_step(s_c, action)
-        save_memory(replay_memory, memory_size, s_c, action, reward, s_n)
+        s_n, reward = envir.run_one_step(s_c, target_pos, action)
+        save_memory(replay_memory, memory_size, s_c, target_pos, action, reward, s_n)
 
         while step_num:
+            target_pos = target_pos_list[np.random.randint(0, len(target_pos_list))]
+
             s_c = s_n
             if np.random.random() <= epsilon:
                 action = np.random.randint(1, 10)
             else:
                 action = DQL.get_best(s_c, target_pos, get_action = True)
             
-            s_n, reward = envir.run_one_step(s_c, action)
-            save_memory(replay_memory, memory_size, s_c, action, reward, s_n)
+            s_n, reward = envir.run_one_step(s_c, target_pos, action)
+            save_memory(replay_memory, memory_size, s_c, target_pos, action, reward, s_n)
 
             # update parameters in deep q learning network
             if (len(replay_memory) > 100 and step_num%50 == 0):
                 x_train, y_train = [], []
                 minibatch = GetMinibatch(minibatch_size, replay_memory)
                 for (i, mini) in enumerate(minibatch):
-                    value_ = DQL.get_best(mini[3], target_pos, get_action = True)
-                    y_train.append(mini[2] + gamma*value_)
-                    x_train.append([mini[0][0], mini[0][1], target_pos[0], target_pos[1], mini[1]])
+                    value_ = DQL.get_best(mini[4], mini[1], get_action = False)
+                    y_train.append(mini[3] + gamma*value_)
+                    x_train.append([mini[0][0], mini[0][1], mini[1][0], mini[1][1], mini[2]])
 
                 DQL.compile(optimizer = tf.keras.optimizers.SGD(learning_rate = 0.001),
                             loss = tf.keras.losses.MeanAbsoluteError(),
@@ -242,16 +243,6 @@ def train(episode):
                         epochs = 600,)
                         # validation_split = 0.2, #从数据集中划分20%给测试集
                         # validation_freq = 20)
-
-                # optimizer = tf.keras.optimizers.SGD(learning_rate=0.01)
-                # for (i, mini) in enumerate(minibatch):
-                #     with tf.GradientTape() as tape:
-                #         value_ = DQL.get_best(mini[3], target_pos, get_action = True)
-                #         y_true = mini[2] + gamma*value_
-                #         y_pred = DQL(tf.constant([[mini[0][0], mini[0][1], target_pos[0], target_pos[1], mini[1]]]))
-                #         loss = tf.square(y_pred - y_true)
-                #     grads = tape.gradient(loss, DQL.variables)    # 使用 model.variables 这一属性直接获得模型中的所有变量
-                #     optimizer.apply_gradients(grads_and_vars=zip(grads, DQL.variables))
 
             reward_list.append(reward)
             step_num -= 1
@@ -269,10 +260,14 @@ def train(episode):
         file_name = './deep_img' + str(e) + '.png'
         plt.savefig(file_name)
 
-    with open('./reward_data.npy', 'wb') as f:
-        np.save(f, reward_list)
-        # np.save(f, Q_table)
+        with open('./reward_data.npy', 'wb') as f:
+            np.save(f, reward_list)
+            # np.save(f, Q_table)
 
 
 if __name__ == '__main__':
-    train(episode = 1000)
+
+    with open('./target_pos_list.npy', 'rb') as f:
+        target_pos_list = np.load(f)
+
+    train(episode = 1000, target_pos_list = target_pos_list)
