@@ -2,7 +2,7 @@ import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
 from typing import MappingView
-from pyjoystick.sdl2 import Key, Joystick, run_event_loop
+# from pyjoystick.sdl2 import Key, Joystick, run_event_loop
 from pprint import pprint
 from threading import Thread
 import time
@@ -18,20 +18,20 @@ import tensorflow as tf
 
 
 def mask_detect():
-        # set green thresh
-        lower_green = np.array([45,70,60])
-        upper_green = np.array([90,255,255])
+    # set green thresh
+    lower_green = np.array([45,70,60])
+    upper_green = np.array([90,255,255])
 
-        cap = cv2.VideoCapture(0)
-        ret, frame = cap.read()
+    cap = cv2.VideoCapture(0)
+    ret, frame = cap.read()
 
-        if ret :
-            frame = cv2.resize(frame, None, fx = 1, fy = 1, interpolation = cv2.INTER_AREA)
-            hsv  = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-            mask = cv2.inRange(hsv, lower_green, upper_green)
-            # edges = cv2.Canny(mask, 100, 200)
-        cap.release()
-        return mask
+    if ret :
+        frame = cv2.resize(frame, None, fx = 1, fy = 1, interpolation = cv2.INTER_AREA)
+        hsv  = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+        mask = cv2.inRange(hsv, lower_green, upper_green)
+        # edges = cv2.Canny(mask, 100, 200)
+    cap.release()
+    return mask
         
 
 def top_detection(mask):
