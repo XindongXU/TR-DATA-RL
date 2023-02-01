@@ -40,7 +40,7 @@ def mask_detect():
         hsv  = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
         mask = cv2.inRange(hsv, lower_green, upper_green)
     cap.release()
-    print("debug: shape of mask is :", np.shape(mask))
+    # print("debug: shape of mask is :", np.shape(mask))
     return mask
         
 
@@ -151,7 +151,7 @@ class DQNet(tf.keras.Model):
         inputs = tf.constant([[state_current[0], state_current[1], 
                                target_pos[0], target_pos[1], action]])
         value = self.call(inputs = inputs).numpy()[0][0]
-        print("debug: best q value is: ", value)
+        # print("debug: best q value is: ", value)
         
         for i in range(8):
             # i varies from 0 to 7, action of i+2 varies from 2 to 9
@@ -276,12 +276,19 @@ def train(episode, target_pos_list):
     DQL = DQNet()
     DQL.compile(optimizer = tf.keras.optimizers.SGD(learning_rate = 0.0001),
                 loss = tf.keras.losses.MeanSquaredError(), metrics = 'mae')
+    DQL.save_weights("./predict_model")
+    
+    DQL_ = DQNet()
+    DQL_.load_weights("./predict_model")
+    DQL_.compile(optimizer = tf.keras.optimizers.SGD(learning_rate = 0.0001),
+                loss = tf.keras.losses.MeanSquaredError(), metrics = 'mae')
+
     
     for e in range(episode):
         target_idx = np.random.randint(0, len(target_pos_list))
         target_pos = [target_pos_list[target_idx][0], target_pos_list[target_idx][1]]
         start = time.time()
-        epsilon = 6 / (e + 1)
+        epsilon = 50 / (e + 1)
         step_num = 100
 
         # detection of initial state, randomize first action, memorize first sequence
@@ -314,7 +321,7 @@ def train(episode, target_pos_list):
                     if mini[5] >= -10:
                         y_train.append(mini[5])
                     else:
-                        value_ = DQL.get_best([mini[6], mini[7]], [mini[2], mini[3]], get_action = False)
+                        value_ = DQL_.get_best([mini[6], mini[7]], [mini[2], mini[3]], get_action = False)
                         y_train.append(mini[5] + gamma*value_)
                     x_train.append([mini[0], mini[1], mini[2], mini[3], mini[4]])
 
@@ -324,8 +331,8 @@ def train(episode, target_pos_list):
                         # validation_split = 0.2, #从数据集中划分20%给测试集
                         # validation_freq = 20)
 
-                DQL.save_weights('/home/mig5/Desktop/TR_DATA_RL/project_RL/deepqlearning_model')
-                # np.save('minibatch', minibatch)
+                DQL.save_weights("./predict_model")
+                np.save('replay_memory', replay_memory)
                 # print(minibatch)
             
             step_num -= 1
@@ -341,6 +348,10 @@ def train(episode, target_pos_list):
         # print(reward_list)
         plt.plot()
         plt.savefig('./deep_img' + str(e) + '.png')
+
+        if (e%5 == 0):
+            DQL_.load_weights("./predict_model")
+            DQL_.save_weights("./target_model")
 
 
 if __name__ == '__main__':

@@ -1,5 +1,5 @@
 import tarfile
-from DQ_Learning import DQNet, environment, mask_detect, top_detection
+from DQ_Learning import DQNet, environment, mask_detect, top_detect
 import os
 import tensorflow as tf
 import numpy as np
@@ -15,14 +15,14 @@ checkpoint_dir  = os.path.dirname(checkpoint_path)
 model = DQNet()
 envir = environment()
 model.load_weights(checkpoint_path)
-model.compile(  optimizer = tf.keras.optimizers.SGD(learning_rate = 0.1),
-                loss = tf.keras.losses.MeanSquaredError(),
-                metrics = 'mae')
+# model.compile(  optimizer = tf.keras.optimizers.SGD(learning_rate = 0.1),
+#                 loss = tf.keras.losses.MeanSquaredError(),
+#                 metrics = 'mae')
 
 # reward_list = []
 
 mask = mask_detect()
-s_c = top_detection(mask)
+s_c = top_detect(mask)
 r = -300
 
 a_t = 9
@@ -47,5 +47,3 @@ while r <= -10:
     # print("current reward =", r)
     print("current state =", s_n)
     s_c = s_n
-
-    
