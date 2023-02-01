@@ -1,5 +1,5 @@
 import tarfile
-from DQ_Learning import DQNet, environment, mask_detect, top_detect
+from DQ_Learning_fix import DQNet, environment, mask_detect, top_detect
 import os
 import tensorflow as tf
 import numpy as np
@@ -8,9 +8,10 @@ with open('./target_pos_list.npy', 'rb') as f:
     target_pos_list = np.load(f)
 target_idx = np.random.randint(0, len(target_pos_list))
 target_pos = [target_pos_list[target_idx][0], target_pos_list[target_idx][1]]
+target_pos = [67, 553] # [120, 110]
 print(target_pos)
 
-checkpoint_path = "/home/mig5/Desktop/TR_DATA_RL/project_RL/deepqlearning_model"
+checkpoint_path = "./target_model"
 checkpoint_dir  = os.path.dirname(checkpoint_path)
 model = DQNet()
 envir = environment()
@@ -23,7 +24,6 @@ model.load_weights(checkpoint_path)
 
 mask = mask_detect()
 s_c = top_detect(mask)
-r = -300
 
 a_t = 9
 s_n, r = envir.run_one_step(state = s_c, 
@@ -45,5 +45,6 @@ while r <= -10:
 
     # reward_list.append(r)
     # print("current reward =", r)
-    print("current state =", s_n)
+    print("current state  =", s_n)
+    print("current target =", target_pos)
     s_c = s_n

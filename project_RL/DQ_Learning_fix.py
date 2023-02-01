@@ -34,7 +34,7 @@ def mask_detect():
     return mask
         
 
-def top_detection(mask):
+def top_detect(mask):
     greenpos0 = []
     greenpos1 = []
     for (index0,liste) in enumerate(mask):
@@ -46,57 +46,44 @@ def top_detection(mask):
     ransac = linear_model.RANSACRegressor()
     ransac.fit(np.array(greenpos0).reshape(-1, 1), np.array(greenpos1).reshape(-1, 1))
     inlier_mask = ransac.inlier_mask_
-
-    # linemask = np.zeros((480, 640))
-    # id0 = (np.array(greenpos0).reshape(-1, 1)[inlier_mask]).reshape(1, -1)[0]
-    # id1 = (np.array(greenpos1).reshape(-1, 1)[inlier_mask]).reshape(1, -1)[0]
     
-    # for i in range(len(id0)):
-    #     linemask[id0[i], id1[i]] = 255
     top1 = np.linalg.norm((np.array(greenpos0).reshape(-1, 1)[inlier_mask][-1,0], np.array(greenpos1).reshape(-1, 1)[inlier_mask][-1,0]))
     top2 = np.linalg.norm((np.array(greenpos0).reshape(-1, 1)[inlier_mask][0, 0], np.array(greenpos1).reshape(-1, 1)[inlier_mask][0, 0]))
 
     if top1 > top2 :
-        # s_0.append(np.array(greenpos0).reshape(-1, 1)[inlier_mask][-1,0])
-        # s_1.append(np.array(greenpos1).reshape(-1, 1)[inlier_mask][-1,0])
         x = np.array(greenpos0).reshape(-1, 1)[inlier_mask][-1,0]
         y = np.array(greenpos1).reshape(-1, 1)[inlier_mask][-1,0]
     else:
-        # s_0.append(np.array(greenpos0).reshape(-1, 1)[inlier_mask][0,0])
-        # s_1.append(np.array(greenpos1).reshape(-1, 1)[inlier_mask][0,0])
         x = np.array(greenpos0).reshape(-1, 1)[inlier_mask][0,0]
         y = np.array(greenpos1).reshape(-1, 1)[inlier_mask][0,0]
     return x, y
 
-def eval_reward(s_pos):
-    global target_pos
-    reward = np.linalg.norm(s_pos - target_pos)
-    return -reward
+def eval_reward(s_pos, target_pos):
+    """
+    Get the current state reward, 
+    by calculating the distance betweem the current toothstick top and the given target.
+
+    Args:
+        s_pos (list): [top_x, top_y], a two elements list.
+        target_pos (list): [x, y], a two elements list.
+        NO np.ndarray
+
+    Returns:
+        reward (float): second norm betweem s_pos and t_pos.
+    """
+    reward = np.linalg.norm(np.array(s_pos) - np.array(target_pos))
+    reward = reward * -1
+    return reward
 
 class DQNet(tf.keras.Model):
     def __init__(self):
         super().__init__()
-        # self.conv1 = tf.keras.layers.Conv2D(
-        #     filters=16,
-        #     kernel_size=[8, 8],
-        #     padding='same',
-        #     activation=tf.nn.relu)
-        # self.pool1 = tf.keras.layers.MaxPool2D(pool_size=[2, 2], strides=2)
-        # self.conv2 = tf.keras.layers.Conv2D(
-        #     filters=32,
-        #     kernel_size=[4, 4],
-        #     padding='same',
-        #     activation=tf.nn.relu)
-        # self.pool2 = tf.keras.layers.MaxPool2D(pool_size=[2, 2], strides=2)
-        # self.flatten = tf.keras.layers.Flatten(input_shape=(5))
-        self.dense1 = tf.keras.layers.Dense(128, activation=tf.nn.relu)
-        self.dense2 = tf.keras.layers.Dense(64, activation=tf.nn.relu)
+        self.dense1 = tf.keras.layers.Dense(32, activation=tf.nn.tanh)
+        self.dense2 = tf.keras.layers.Dense(4, activation=tf.nn.tanh)
         self.dense3 = tf.keras.layers.Dense(1)
 
     def call(self, inputs):
-        # x = self.flatten(inputs)
         x = self.dense1(inputs)
-        x = self.dense2(x)
         x = self.dense3(x)
         output = x
         return output
@@ -106,56 +93,49 @@ class DQNet(tf.keras.Model):
         inputs = tf.constant([[state_current[0], state_current[1], 
                                target_pos[0], target_pos[1], 
                                action]])
-        value = self.call(inputs = inputs)
+        value = self.call(inputs = inputs).numpy()[0][0]
         
         for i in range(8):
             inputs = tf.constant([[state_current[0], state_current[1], 
                                target_pos[0], target_pos[1], 
                                i + 2]])
 
-            value_new = self.call(inputs = inputs)
-            if value < value_new:
+            value_new = self.call(inputs = inputs).numpy()[0][0]
+            if value <= value_new:
                 value = value_new
                 action = i + 2
+
         return action if get_action else value
 
 class environment:
     
     def __init__(self):
-        # low and high are lists
         # representing the min and max of each state possible values
         self.servo_0_value = 0
         self.servo_1_value = 0
         self.servo_0_target = 0
         self.servo_1_target = 0
-        self.servo_0_pos = []
-        self.servo_1_pos = []
-        self.action_list = []
 
     def clamp(x, lo, hi):
         return max(lo, min(hi, x))
         
-    def run_one_step(self, state, action):
+    def run_one_step(self, state, target_pos, action):
         # perform action chosen, return new state info, reward and other info
-        # action at = 0, 1, 2...
+        # action at = 1, 2, ..., 9
         speed = 100
         ser = serial.Serial('/dev/ttyACM0')
 
         self.servo_0_value = 0.1 * (-1 + (action - 1)//3)
         self.servo_1_value = 0.1 * (-1 + (action - 1) %3)
-
-        self.servo_0_target = self.servo_0_target + speed * self.servo_0_value * 1
-        self.servo_1_target = self.servo_1_target + speed * self.servo_1_value * 1
+        # servo values vary from -0.1 to 0.1, and need to be timed by speed
+        self.servo_0_target = self.servo_0_target + speed * self.servo_0_value
+        self.servo_1_target = self.servo_1_target + speed * self.servo_1_value
 
         # self.servo_0_target = action[0]
         # self.servo_1_target = action[1]
 
         self.servo_0_target = max(0, min(180, self.servo_0_target))
         self.servo_1_target = max(0, min(180, self.servo_1_target))
-
-        self.servo_0_pos.append(self.servo_0_target)
-        self.servo_1_pos.append(self.servo_1_target)
-        self.action_list.append(action)
 
         print(f'\r {self.servo_0_target:.2f} {self.servo_1_target:.2f}')
         ser.write(f'{int(self.servo_0_target) << 1}\n{(int(self.servo_1_target) << 1) + 1}\n'.encode())
@@ -164,24 +144,53 @@ class environment:
 
         ## detection of top point at next time step
         mask = mask_detect()
-        top_x, top_y = top_detection(mask)
+        top_x, top_y = top_detect(mask)
 
-        state_next = np.array([top_x, top_y])
+        state_next = [top_x, top_y]
         # print("target position =", self.__decode(self.target_pos), self.target_pos)
         # print("ourarm position =", self.__decode(s_t), s_t)
 
-        reward_current = eval_reward(state_next)
+        reward_current = eval_reward(state_next, target_pos)
         print("current reward  =", reward_current)
 
         return state_next, reward_current
 
-def save_memory(replay_memory, memory_size, state_current, action_current, reward_current, state_next):
-    replay_memory.append([state_current, action_current, reward_current, state_next])
+def save_memory(replay_memory, memory_size, state_current, target_pos, action_current, reward_current, state_next):
+    """
+    Save all the enivornment parameters into an experience storage, which
+    will be used during replay learning, and the trainning of network.
+    And ensure that the size of repaly memory is smaller than the given size.
+
+    Args:
+        replay_memory   (list): a list of list of 8 elements.
+        memory_size     (int)
+        state_current   (list of iwo elements)
+        target_pos      (list of iwo elements)
+        action_current  (int): varies from 1 to 9.
+        reward_current  (float)
+        state_next      (list of iwo elements)
+
+    Returns:
+        None.
+    """
+    replay_memory.append([state_current[0], state_current[1], target_pos[0], target_pos[1], 
+                        action_current, reward_current, state_next[0], state_next[1]])
 
     if len(replay_memory) > memory_size:
         replay_memory.popleft()
 
 def GetMinibatch(minibatch_size, replay_memory):
+    """
+    Randomly sample some components from replay memory storage, 
+    with a length of given value.
+
+    Args:
+        minibatch_size  (int) : maximum of volume of one mini batch.
+        replay_memory   (list): a list of list of 8 elements.
+
+    Returns:
+        minibatch (list): a list of list of 8 elements, with length of batch size.
+    """
     batch_size = minibatch_size if len(replay_memory) > minibatch_size else len(replay_memory)
     minibatch = random.sample(replay_memory, batch_size)
 
@@ -189,30 +198,42 @@ def GetMinibatch(minibatch_size, replay_memory):
     
 
 
-def train(episode):
-    global target_pos
-    target_pos = np.array([229, 567])
-
+def train(episode, target_pos_list):
+    
     replay_memory = []
     memory_size = 10000
-    minibatch_size = 100
-    gamma = 0.99
+    minibatch_size = 500
+    gamma = 0.9
+
+    target_idx = 30
+    target_pos = [target_pos_list[target_idx][0], target_pos_list[target_idx][1]]
+    print(target_pos)
     
     reward_list = []
     envir = environment()
     DQL = DQNet()
+    DQL.compile(optimizer = tf.keras.optimizers.SGD(learning_rate = 0.001),
+                loss = tf.keras.losses.MeanSquaredError(), metrics = 'mae')
+    DQL.save_weights("./predict_model")
     
+    DQL_ = DQNet()
+    DQL_.load_weights("./predict_model")
+    DQL_.compile(optimizer = tf.keras.optimizers.SGD(learning_rate = 0.001),
+                loss = tf.keras.losses.MeanSquaredError(), metrics = 'mae')
+    DQL_.save_weights("./target_model")
+
+
     for e in range(episode):
         start = time.time()
-        epsilon = 2 / (e + 1)
+        epsilon = 10 / (e + 1)
         step_num = 100
 
         # detection of initial state, randomize first action, memorize first sequence
         mask = mask_detect()
         action = np.random.randint(1, 10)
-        s_c = np.array(top_detection(mask))
-        s_n, reward = envir.run_one_step(s_c, action)
-        save_memory(replay_memory, memory_size, s_c, action, reward, s_n)
+        s_c = top_detect(mask)
+        s_n, reward = envir.run_one_step(s_c, target_pos, action)
+        save_memory(replay_memory, memory_size, s_c, target_pos, action, reward, s_n)
 
         while step_num:
             s_c = s_n
@@ -221,37 +242,30 @@ def train(episode):
             else:
                 action = DQL.get_best(s_c, target_pos, get_action = True)
             
-            s_n, reward = envir.run_one_step(s_c, action)
-            save_memory(replay_memory, memory_size, s_c, action, reward, s_n)
+            s_n, reward = envir.run_one_step(s_c, target_pos, action)
+            save_memory(replay_memory, memory_size, s_c, target_pos, action, reward, s_n)
 
             # update parameters in deep q learning network
             if (len(replay_memory) > 100 and step_num%50 == 0):
                 x_train, y_train = [], []
                 minibatch = GetMinibatch(minibatch_size, replay_memory)
                 for (i, mini) in enumerate(minibatch):
-                    value_ = DQL.get_best(mini[3], target_pos, get_action = False)
-                    y_train.append(mini[2] + gamma*value_)
-                    x_train.append([mini[0][0], mini[0][1], target_pos[0], target_pos[1], mini[1]])
-
-                DQL.compile(optimizer = tf.keras.optimizers.SGD(learning_rate = 0.001),
-                            loss = tf.keras.losses.MeanAbsoluteError(),
-                            metrics = 'mae')
+                    # one example of mini with 8 elements: 
+                    # [state_current[0], state_current[1], target_pos[0], target_pos[1], 
+                    # action_current, reward_current, state_next[0], state_next[1]]
+                    if mini[5] >= -10:
+                        y_train.append(mini[5])
+                    else:
+                        value_ = DQL_.get_best([mini[6], mini[7]], [mini[2], mini[3]], get_action = False)
+                        y_train.append(mini[5] + gamma*value_)
+                    x_train.append([mini[0], mini[1], mini[2], mini[3], mini[4]])
 
                 DQL.fit(np.array(x_train), np.array(y_train),
-                        batch_size = 64, #每一批batch的大小为32，
-                        epochs = 600,)
+                        # batch_size = 100, #每一批batch的大小为32，
+                        epochs = 100,)
                         # validation_split = 0.2, #从数据集中划分20%给测试集
                         # validation_freq = 20)
-
-                # optimizer = tf.keras.optimizers.SGD(learning_rate=0.01)
-                # for (i, mini) in enumerate(minibatch):
-                #     with tf.GradientTape() as tape:
-                #         value_ = DQL.get_best(mini[3], target_pos, get_action = True)
-                #         y_true = mini[2] + gamma*value_
-                #         y_pred = DQL(tf.constant([[mini[0][0], mini[0][1], target_pos[0], target_pos[1], mini[1]]]))
-                #         loss = tf.square(y_pred - y_true)
-                #     grads = tape.gradient(loss, DQL.variables)    # 使用 model.variables 这一属性直接获得模型中的所有变量
-                #     optimizer.apply_gradients(grads_and_vars=zip(grads, DQL.variables))
+                DQL.save_weights("./predict_model")
 
             reward_list.append(reward)
             step_num -= 1
@@ -269,10 +283,18 @@ def train(episode):
         file_name = './deep_img' + str(e) + '.png'
         plt.savefig(file_name)
 
+        if (e%5 == 0):
+            DQL_.load_weights("./predict_model")
+            DQL_.save_weights("./target_model")
+
     with open('./reward_data.npy', 'wb') as f:
         np.save(f, reward_list)
         # np.save(f, Q_table)
 
 
 if __name__ == '__main__':
-    train(episode = 1000)
+
+    with open('./target_pos_list.npy', 'rb') as f:
+        target_pos_list = np.load(f)
+
+    train(episode = 1000, target_pos_list = target_pos_list)

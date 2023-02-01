@@ -120,14 +120,14 @@ class DQNet(tf.keras.Model):
         #               padding='same', activation=tf.nn.relu)
         # self.pool2 = tf.keras.layers.MaxPool2D(pool_size=[2, 2], strides=2)
         # self.flatten = tf.keras.layers.Flatten(input_shape=(5))
-        self.dense1 = tf.keras.layers.Dense(64, activation = tf.nn.tanh)
+        self.dense1 = tf.keras.layers.Dense(128, activation = tf.nn.tanh)
         self.dense2 = tf.keras.layers.Dense(16, activation = tf.nn.tanh)
         self.dense3 = tf.keras.layers.Dense(4, activation = tf.nn.tanh)
         self.dense4 = tf.keras.layers.Dense(1)
 
     def call(self, inputs):
-        x = self.dense2(inputs)
-        x = self.dense3(x)
+        x = self.dense1(inputs)
+        x = self.dense2(x)
         x = self.dense4(x)
         output = x
         return output
@@ -270,7 +270,7 @@ def train(episode, target_pos_list):
     replay_memory = []
     memory_size = 10000
     minibatch_size = 500
-    gamma = 0.95
+    gamma = 0.99
     
     envir = environment()
     DQL = DQNet()
@@ -288,7 +288,7 @@ def train(episode, target_pos_list):
         target_idx = np.random.randint(0, len(target_pos_list))
         target_pos = [target_pos_list[target_idx][0], target_pos_list[target_idx][1]]
         start = time.time()
-        epsilon = 50 / (e + 1)
+        epsilon = 10 / (e + 1)
         step_num = 100
 
         # detection of initial state, randomize first action, memorize first sequence
@@ -327,7 +327,7 @@ def train(episode, target_pos_list):
 
                 DQL.fit(np.array(x_train), np.array(y_train),
                         # batch_size = 100, #每一批batch的大小为32，
-                        epochs = 300,)
+                        epochs = 100,)
                         # validation_split = 0.2, #从数据集中划分20%给测试集
                         # validation_freq = 20)
 
@@ -349,7 +349,7 @@ def train(episode, target_pos_list):
         plt.plot()
         plt.savefig('./deep_img' + str(e) + '.png')
 
-        if (e%5 == 0):
+        if (e%3 == 0):
             DQL_.load_weights("./predict_model")
             DQL_.save_weights("./target_model")
 
