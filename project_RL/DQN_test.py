@@ -8,7 +8,7 @@ with open('./target_pos_list.npy', 'rb') as f:
     target_pos_list = np.load(f)
 target_idx = np.random.randint(0, len(target_pos_list))
 target_pos = [target_pos_list[target_idx][0], target_pos_list[target_idx][1]]
-target_pos = [67, 553] # [120, 110]
+target_pos = [121, 564] # [120, 110]
 print(target_pos)
 
 checkpoint_path = "./target_model"
