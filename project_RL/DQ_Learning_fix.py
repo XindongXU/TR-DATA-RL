@@ -1,19 +1,13 @@
 import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
-from typing import MappingView
-# from pyjoystick.sdl2 import Key, Joystick, run_event_loop
-from pprint import pprint
-from threading import Thread
 import time
 import serial
 import random
 import numpy as np
-from webcam import webcamera
 import cv2
 from sklearn import linear_model
 import matplotlib.pyplot as plt
-from reset_position import reset_pos
 import tensorflow as tf
 
 
@@ -110,7 +104,6 @@ class DQNet(tf.keras.Model):
 class environment:
     
     def __init__(self):
-        # representing the min and max of each state possible values
         self.servo_0_value = 0
         self.servo_1_value = 0
         self.servo_0_target = 0
@@ -127,25 +120,18 @@ class environment:
 
         self.servo_0_value = 0.1 * (-1 + (action - 1)//3)
         self.servo_1_value = 0.1 * (-1 + (action - 1) %3)
-        # servo values vary from -0.1 to 0.1, and need to be timed by speed
         self.servo_0_target = self.servo_0_target + speed * self.servo_0_value
         self.servo_1_target = self.servo_1_target + speed * self.servo_1_value
-
-        # self.servo_0_target = action[0]
-        # self.servo_1_target = action[1]
-
         self.servo_0_target = max(0, min(180, self.servo_0_target))
         self.servo_1_target = max(0, min(180, self.servo_1_target))
 
         print(f'\r {self.servo_0_target:.2f} {self.servo_1_target:.2f}')
         ser.write(f'{int(self.servo_0_target) << 1}\n{(int(self.servo_1_target) << 1) + 1}\n'.encode())
-        # time.sleep(max(self.servo_0_target, self.servo_1_target)/90)
         time.sleep(0.2)
 
         ## detection of top point at next time step
         mask = mask_detect()
         top_x, top_y = top_detect(mask)
-
         state_next = [top_x, top_y]
         # print("target position =", self.__decode(self.target_pos), self.target_pos)
         # print("ourarm position =", self.__decode(s_t), s_t)
@@ -203,7 +189,7 @@ def train(episode, target_pos_list):
     replay_memory = []
     memory_size = 10000
     minibatch_size = 500
-    gamma = 0.9
+    gamma = 0.99
 
     target_idx = 30
     target_pos = [target_pos_list[target_idx][0], target_pos_list[target_idx][1]]
@@ -235,7 +221,7 @@ def train(episode, target_pos_list):
         s_n, reward = envir.run_one_step(s_c, target_pos, action)
         save_memory(replay_memory, memory_size, s_c, target_pos, action, reward, s_n)
 
-        while step_num:
+        while (step_num - 1):
             s_c = s_n
             if np.random.random() <= epsilon:
                 action = np.random.randint(1, 10)
@@ -261,11 +247,9 @@ def train(episode, target_pos_list):
                     x_train.append([mini[0], mini[1], mini[2], mini[3], mini[4]])
 
                 DQL.fit(np.array(x_train), np.array(y_train),
-                        # batch_size = 100, #每一批batch的大小为32，
                         epochs = 100,)
-                        # validation_split = 0.2, #从数据集中划分20%给测试集
-                        # validation_freq = 20)
                 DQL.save_weights("./predict_model")
+                np.save('replay_memory_fix', replay_memory)
 
             reward_list.append(reward)
             step_num -= 1
@@ -289,7 +273,6 @@ def train(episode, target_pos_list):
 
     with open('./reward_data.npy', 'wb') as f:
         np.save(f, reward_list)
-        # np.save(f, Q_table)
 
 
 if __name__ == '__main__':

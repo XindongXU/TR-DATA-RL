@@ -1,2 +1,2 @@
-model_checkpoint_path: "predict_model"
-all_model_checkpoint_paths: "predict_model"
+model_checkpoint_path: "target_model_home_night"
+all_model_checkpoint_paths: "target_model_home_night"
