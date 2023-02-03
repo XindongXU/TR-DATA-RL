@@ -16,6 +16,8 @@ import matplotlib.pyplot as plt
 from reset_position import reset_pos
 import tensorflow as tf
 
+servo_0_target = 0
+servo_1_target = 0
 
 def mask_detect():
     """
@@ -112,6 +114,8 @@ class DQNet(tf.keras.Model):
         dense: tf.keras.layers.Dense(units = output shape, activation = tf.nn.tanh or none)
     """
     def __init__(self):
+        global servo_0_target
+        global servo_1_target
         super().__init__()
         self.dense1 = tf.keras.layers.Dense(8, activation = tf.nn.tanh)
         self.dense2 = tf.keras.layers.Dense(6, activation = tf.nn.tanh)
@@ -155,8 +159,10 @@ class DQNet(tf.keras.Model):
             action (int): varies from 1 to 9, if get_action == True
             value (float): best Q value could obtain.
         """
+        global servo_0_target
+        global servo_1_target
 
-        action = 1
+        action = 5
         action_0 = 0.1 * (-1 + (action - 1)//3)
         action_1 = 0.1 * (-1 + (action - 1) %3)
         inputs = tf.constant([[state_current[0], state_current[1], 
@@ -164,16 +170,17 @@ class DQNet(tf.keras.Model):
         value = self.call(inputs = inputs).numpy()[0][0]
         # print("debug: best q value is: ", value)
         
-        for i in range(8):
-            # i varies from 0 to 7, action of i+2 varies from 2 to 9
-            action_0 = 0.1 * (-1 + (i + 2 - 1)//3)
-            action_1 = 0.1 * (-1 + (i + 2 - 1) %3)
-            inputs = tf.constant([[state_current[0], state_current[1], 
-                               target_pos[0], target_pos[1], action_0, action_1]])
-            value_new = self.call(inputs = inputs).numpy()[0][0]
-            if value <= value_new:
-                value = value_new
-                action = i + 2
+        for i in range(9):
+            # i varies from 0 to 8, action of i+1 varies from 1 to 9
+            action_0 = 0.1 * (-1 + (i + 1 - 1)//3)
+            action_1 = 0.1 * (-1 + (i + 1 - 1) %3)
+            if (servo_0_target + action_0) <= 180 and (servo_0_target + action_0) >= 0 and (servo_1_target + action_1) <= 180 and (servo_1_target + action_1) >= 0 :
+                inputs = tf.constant([[state_current[0], state_current[1], 
+                                target_pos[0], target_pos[1], action_0, action_1]])
+                value_new = self.call(inputs = inputs).numpy()[0][0]
+                if value <= value_new:
+                    value = value_new
+                    action = i + 1
         return action if get_action else value
 
 
@@ -189,10 +196,10 @@ class environment:
     def __init__(self):
         # low and high are lists
         # representing the min and max of each state possible values
+        global servo_0_target
+        global servo_1_target
         self.servo_0_value = 0
         self.servo_1_value = 0
-        self.servo_0_target = 0
-        self.servo_1_target = 0
 
     def clamp(x, lo, hi):
         return max(lo, min(hi, x))
@@ -200,23 +207,25 @@ class environment:
     def run_one_step(self, state, target_pos, action):
         # perform action chosen, return new state info, reward and other info
         # action at = 1, 2, ..., 9
+        global servo_0_target
+        global servo_1_target
         speed = 100
         ser = serial.Serial('/dev/ttyACM0')
 
         self.servo_0_value = 0.1 * (-1 + (action - 1)//3)
         self.servo_1_value = 0.1 * (-1 + (action - 1) %3)
         # servo values vary from -0.1 to 0.1, and need to be timed by speed
-        self.servo_0_target = self.servo_0_target + speed * self.servo_0_value
-        self.servo_1_target = self.servo_1_target + speed * self.servo_1_value
+        servo_0_target = servo_0_target + speed * self.servo_0_value
+        servo_1_target = servo_1_target + speed * self.servo_1_value
 
         # self.servo_0_target = action[0]
         # self.servo_1_target = action[1]
 
-        self.servo_0_target = max(0, min(180, self.servo_0_target))
-        self.servo_1_target = max(0, min(180, self.servo_1_target))
+        servo_0_target = max(0, min(180, servo_0_target))
+        servo_1_target = max(0, min(180, servo_1_target))
 
-        print(f'\r {self.servo_0_target:.2f} {self.servo_1_target:.2f}')
-        ser.write(f'{int(self.servo_0_target) << 1}\n{(int(self.servo_1_target) << 1) + 1}\n'.encode())
+        print(f'\r {servo_0_target:.2f} {servo_1_target:.2f}')
+        ser.write(f'{int(servo_0_target) << 1}\n{(int(servo_1_target) << 1) + 1}\n'.encode())
         # time.sleep(max(self.servo_0_target, self.servo_1_target)/90)
         time.sleep(0.2)
 
@@ -309,7 +318,7 @@ def train(episode, target_pos_list):
     
     DQL_ = DQNet()
     DQL_.load_weights("./predict_model")
-    DQL_.save_weights("./target_model")
+    
     DQL.compile(optimizer = tf.keras.optimizers.Adam(learning_rate = 0.001),
             loss = tf.keras.losses.MeanSquaredError(), metrics = 'mae')
     DQL_.compile(optimizer = tf.keras.optimizers.Adam(learning_rate = 0.001),
@@ -345,30 +354,32 @@ def train(episode, target_pos_list):
             step_num -= 1
             print(step_num)
 
-        # update parameters in deep q learning network at end of every episode
-        x_train, y_train = [], []
-        minibatch = GetMinibatch(minibatch_size, replay_memory)
-        for (i, mini) in enumerate(minibatch):
-            # one example of mini with 8 elements: 
-            # [state_current[0], state_current[1], target_pos[0], target_pos[1], 
-            # action_current, reward_current, state_next[0], state_next[1]]
-            if mini[5] >= -10:
-                y_train.append(mini[5])
-            else:
-                value_ = DQL_.get_best([mini[6], mini[7]], [mini[2], mini[3]], get_action = False)
-                y_train.append(mini[5] + gamma*value_)
-
-            action_0 = 0.1 * (-1 + (mini[4] - 1)//3)
-            action_1 = 0.1 * (-1 + (mini[4] - 1) %3)
-            x_train.append([mini[0], mini[1], mini[2], mini[3], action_0, action_1])
-
-        DQL.fit(np.array(x_train), np.array(y_train), batch_size = 64, epochs = 100)
-        DQL.save_weights("./predict_model")
         np.save('replay_memory', replay_memory)
 
-        if (e%3 == 0):
-            DQL_.load_weights("./predict_model")
-            DQL_.save_weights("./target_model")
+        # update parameters in deep q learning network at end of every episode
+        if len(replay_memory) >= 900:
+            x_train, y_train = [], []
+            minibatch = GetMinibatch(minibatch_size, replay_memory)
+            for (i, mini) in enumerate(minibatch):
+                # one example of mini with 8 elements: 
+                # [state_current[0], state_current[1], target_pos[0], target_pos[1], 
+                # action_current, reward_current, state_next[0], state_next[1]]
+                if mini[5] >= -10:
+                    y_train.append(mini[5])
+                else:
+                    value_ = DQL_.get_best([mini[6], mini[7]], [mini[2], mini[3]], get_action = False)
+                    y_train.append(mini[5] + gamma*value_)
+
+                action_0 = 0.1 * (-1 + (mini[4] - 1)//3)
+                action_1 = 0.1 * (-1 + (mini[4] - 1) %3)
+                x_train.append([mini[0], mini[1], mini[2], mini[3], action_0, action_1])
+
+            DQL.fit(np.array(x_train), np.array(y_train), batch_size = 64, epochs = 100)
+            DQL.save_weights("./predict_model")
+            
+            if (e%3 == 0):
+                DQL_.load_weights("./predict_model")
+                DQL_.save_weights("./target_model")
         
         end = time.time()
         print('Episode:{0:d}'.format(e),

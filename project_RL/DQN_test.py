@@ -14,7 +14,8 @@ target_idx = np.random.randint(0, len(target_pos_list))
 target_pos = [target_pos_list[target_idx][0], target_pos_list[target_idx][1]]
 print(target_pos)
 
-checkpoint_path = "./target_model"
+# checkpoint_path = "./target_model"
+checkpoint_path = "./target_model_0"
 checkpoint_dir  = os.path.dirname(checkpoint_path)
 model = DQNet()
 envir = environment()
@@ -26,13 +27,13 @@ reward_list = []
 mask = mask_detect()
 s_c = top_detect(mask)
 
-a_t = 9
+a_t = 5
 s_n, r = envir.run_one_step(state = s_c, 
                             target_pos = target_pos, 
                             action = a_t)
 print("current state =", s_n)
 s_c = s_n
-time.sleep(0.2)
+time.sleep(2)
 
 while r <= -10:
 

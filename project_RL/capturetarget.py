@@ -1,11 +1,11 @@
 import cv2
 import numpy as np
 from sklearn import linear_model
+from threading import Thread
+from time import sleep, time
+import serial
 
 target_pos_list = []
-
-cap = cv2.VideoCapture(0)
-
 lower_green = np.array([45,70,60])
 upper_green = np.array([90,255,255])
 
@@ -42,16 +42,41 @@ def top_detection(mask):
         x = np.array(greenpos0).reshape(-1, 1)[inlier_mask][0,0]
         y = np.array(greenpos1).reshape(-1, 1)[inlier_mask][0,0]
     return x, y
-        
-while True:
+
+
+def clamp(x, lo, hi):
+    return max(lo, min(hi, x))
+
+actions_liste = [[0, 0], [0, 10], [0, 20], [0, 30], [0, 40], [0, 50], [0, 60], [0, 70], [0, 80], [0, 90], 
+            [0, 100], [0, 110], [0, 120], [0, 130], [0, 140], [0, 150], [0, 160], [0, 170], [0, 180], 
+            [0, 180], [10, 180], [20, 180], [30, 180], [40, 180], [50, 180], [60, 180], [70, 180], [80, 180], [90, 180], 
+            [100, 180], [110, 180], [120, 180], [130, 180], [140, 180], [150, 180], [160, 180], [170, 180], [180, 180],
+            [180, 180], [180, 170], [180, 160], [180, 150], [180, 140], [180, 130], [180, 120], [180, 110], [180, 100], [180, 90], 
+            [180, 80], [180, 70], [180, 60], [180, 50], [180, 40], [180, 30], [180, 20], [180, 10], [180, 0],
+            [180, 0], [170, 0], [160, 0], [150, 0], [140, 0], [130, 0], [120, 0], [110, 0], [100, 0], [90, 0], 
+            [80, 0], [70, 0], [60, 0], [50, 0], [40, 0], [30, 0], [20, 0], [10, 0], [0, 0]]
+
+
+speed = 60
+ser = serial.Serial('/dev/ttyACM0')
+
+cap = cv2.VideoCapture(0)
+for actions in actions_liste:
+
+    servo_0_target = actions[0]
+    servo_1_target = actions[1]
+
+    print(f'\r {servo_0_target:.2f} {servo_1_target:.2f}', end='')
+    ser.write(f'{int(servo_0_target) << 1}\n{(int(servo_1_target) << 1) + 1}\n'.encode())
+    sleep(0.5)
     ret, frame = cap.read()
     frame = cv2.resize(frame, None, fx=1, fy=1, interpolation=cv2.INTER_AREA)
-    cv2.imshow('frame', frame)
+    # cv2.imshow('frame', frame)
 
     frame = cv2.resize(frame, None, fx = 1, fy = 1, interpolation = cv2.INTER_AREA)
     hsv  = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
     mask = cv2.inRange(hsv, lower_green, upper_green)
-    cv2.imshow('green mask', mask)
+    # cv2.imshow('green mask', mask)
 
     pointmask = np.zeros((480, 640, 3))
     pointmask[:, :, 1] = mask
@@ -63,15 +88,13 @@ while True:
     # # print(top0, top1)
     pointmask[top0, top1, 0] = 255
     pointmask[top0, top1, 2] = 255
-    cv2.imshow('green point', pointmask)
+    # cv2.imshow('green point', pointmask)
 
-    
-    # press escape to exit
-    if (cv2.waitKey(30) == 27):
-       break
+    with open('./target_pos_list.npy', 'wb') as f:
+        np.save(f, np.array(target_pos_list))
 
-cap.release()
-cv2.destroyAllWindows()
-
-with open('./target_pos_list.npy', 'wb') as f:
-    np.save(f, np.array(target_pos_list))
+#     # press escape to exit
+#     if (cv2.waitKey(30) == 27):
+#        break
+# cap.release()
+# cv2.destroyAllWindows()

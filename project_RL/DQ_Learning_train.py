@@ -4,7 +4,7 @@ import tensorflow as tf
 import numpy as np
 import matplotlib.pyplot as plt
 
-replay_memory = np.load('../replay_memory.npy', allow_pickle=True)
+replay_memory = np.load('./replay_memory.npy', allow_pickle=True)
 replay_memory = np.ndarray.tolist(replay_memory)
 
 envir = environment()
