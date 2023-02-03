@@ -113,21 +113,29 @@ class DQNet(tf.keras.Model):
     """
     def __init__(self):
         super().__init__()
-        # self.conv1 = tf.keras.layers.Conv2D(filters=16, kernel_size=[8, 8], 
-        #               padding='same', activation=tf.nn.relu)
-        # self.pool1 = tf.keras.layers.MaxPool2D(pool_size=[2, 2], strides=2)
-        # self.conv2 = tf.keras.layers.Conv2D(filters=32, kernel_size=[4, 4],
-        #               padding='same', activation=tf.nn.relu)
-        # self.pool2 = tf.keras.layers.MaxPool2D(pool_size=[2, 2], strides=2)
-        # self.flatten = tf.keras.layers.Flatten(input_shape=(5))
-        self.dense1 = tf.keras.layers.Dense(128, activation = tf.nn.tanh)
-        self.dense2 = tf.keras.layers.Dense(16, activation = tf.nn.tanh)
+        self.dense1 = tf.keras.layers.Dense(8, activation = tf.nn.tanh)
+        self.dense2 = tf.keras.layers.Dense(6, activation = tf.nn.tanh)
         self.dense3 = tf.keras.layers.Dense(4, activation = tf.nn.tanh)
         self.dense4 = tf.keras.layers.Dense(1)
+        
+        self.bn1 = tf.keras.layers.BatchNormalization()
+        self.bn2 = tf.keras.layers.BatchNormalization()
+        self.bn3 = tf.keras.layers.BatchNormalization()
+        self.bn4 = tf.keras.layers.BatchNormalization()
 
     def call(self, inputs):
-        x = self.dense1(inputs)
-        x = self.dense2(x)
+        
+        x = self.bn1(inputs)
+        
+        x = self.dense1(x)
+        x = self.bn2(x)
+        
+#         x = self.dense2(x)
+#         x = self.bn3(x)
+        
+        x = self.dense3(x)
+        x = self.bn4(x)
+        
         x = self.dense4(x)
         output = x
         return output
@@ -147,21 +155,25 @@ class DQNet(tf.keras.Model):
             action (int): varies from 1 to 9, if get_action == True
             value (float): best Q value could obtain.
         """
+
         action = 1
+        action_0 = 0.1 * (-1 + (action - 1)//3)
+        action_1 = 0.1 * (-1 + (action - 1) %3)
         inputs = tf.constant([[state_current[0], state_current[1], 
-                               target_pos[0], target_pos[1], action]])
+                               target_pos[0], target_pos[1], action_0, action_1]])
         value = self.call(inputs = inputs).numpy()[0][0]
         # print("debug: best q value is: ", value)
         
         for i in range(8):
             # i varies from 0 to 7, action of i+2 varies from 2 to 9
+            action_0 = 0.1 * (-1 + (i + 2 - 1)//3)
+            action_1 = 0.1 * (-1 + (i + 2 - 1) %3)
             inputs = tf.constant([[state_current[0], state_current[1], 
-                               target_pos[0], target_pos[1], i + 2]])
+                               target_pos[0], target_pos[1], action_0, action_1]])
             value_new = self.call(inputs = inputs).numpy()[0][0]
             if value <= value_new:
                 value = value_new
                 action = i + 2
-        
         return action if get_action else value
 
 
@@ -222,6 +234,25 @@ class environment:
         return state_next, reward_current
 
 
+class LearningRateReducerCb(tf.keras.callbacks.Callback):
+    
+    def __init__(self, step):
+        self.step = step
+        
+    def on_train_begin(self, logs={}):
+        print(self.model.optimizer.lr.read_value())
+        if self.step%4 == 0 and self.step != 0:
+            old_lr = self.model.optimizer.lr.read_value()
+            new_lr = 0.0001
+            self.model.optimizer.lr.assign(new_lr)
+            print("\nStep: {}. Reducing Learning Rate from {} to {}".format(self.step, old_lr, new_lr))
+        else:
+            old_lr = self.model.optimizer.lr.read_value()
+            new_lr = 0.001
+            self.model.optimizer.lr.assign(new_lr)
+            print("\nStep: {}. Reducing Learning Rate from {} to {}".format(self.step, old_lr, new_lr))
+
+
 def save_memory(replay_memory, memory_size, state_current, target_pos, action_current, reward_current, state_next):
     """
     Save all the enivornment parameters into an experience storage, which
@@ -269,19 +300,20 @@ def train(episode, target_pos_list):
     
     replay_memory = []
     memory_size = 10000
-    minibatch_size = 500
+    minibatch_size = 1000
     gamma = 0.99
     
     envir = environment()
     DQL = DQNet()
-    DQL.compile(optimizer = tf.keras.optimizers.SGD(learning_rate = 0.0001),
-                loss = tf.keras.losses.MeanSquaredError(), metrics = 'mae')
     DQL.save_weights("./predict_model")
     
     DQL_ = DQNet()
     DQL_.load_weights("./predict_model")
-    DQL_.compile(optimizer = tf.keras.optimizers.SGD(learning_rate = 0.0001),
-                loss = tf.keras.losses.MeanSquaredError(), metrics = 'mae')
+    DQL_.save_weights("./target_model")
+    DQL.compile(optimizer = tf.keras.optimizers.Adam(learning_rate = 0.001),
+            loss = tf.keras.losses.MeanSquaredError(), metrics = 'mae')
+    DQL_.compile(optimizer = tf.keras.optimizers.Adam(learning_rate = 0.001),
+            loss = tf.keras.losses.MeanSquaredError(), metrics = 'mae')
 
     
     for e in range(episode):
@@ -310,48 +342,39 @@ def train(episode, target_pos_list):
             s_n, reward = envir.run_one_step(s_c, target_pos, action)
             save_memory(replay_memory, memory_size, s_c, target_pos, action, reward, s_n)
 
-            # update parameters in deep q learning network
-            if (len(replay_memory) > 100 and step_num%50 == 0):
-                x_train, y_train = [], []
-                minibatch = GetMinibatch(minibatch_size, replay_memory)
-                for (i, mini) in enumerate(minibatch):
-                    # one example of mini with 8 elements: 
-                    # [state_current[0], state_current[1], target_pos[0], target_pos[1], 
-                    # action_current, reward_current, state_next[0], state_next[1]]
-                    if mini[5] >= -10:
-                        y_train.append(mini[5])
-                    else:
-                        value_ = DQL_.get_best([mini[6], mini[7]], [mini[2], mini[3]], get_action = False)
-                        y_train.append(mini[5] + gamma*value_)
-                    x_train.append([mini[0], mini[1], mini[2], mini[3], mini[4]])
-
-                DQL.fit(np.array(x_train), np.array(y_train),
-                        # batch_size = 100, #每一批batch的大小为32，
-                        epochs = 100,)
-                        # validation_split = 0.2, #从数据集中划分20%给测试集
-                        # validation_freq = 20)
-
-                DQL.save_weights("./predict_model")
-                np.save('replay_memory', replay_memory)
-                # print(minibatch)
-            
             step_num -= 1
             print(step_num)
+
+        # update parameters in deep q learning network at end of every episode
+        x_train, y_train = [], []
+        minibatch = GetMinibatch(minibatch_size, replay_memory)
+        for (i, mini) in enumerate(minibatch):
+            # one example of mini with 8 elements: 
+            # [state_current[0], state_current[1], target_pos[0], target_pos[1], 
+            # action_current, reward_current, state_next[0], state_next[1]]
+            if mini[5] >= -10:
+                y_train.append(mini[5])
+            else:
+                value_ = DQL_.get_best([mini[6], mini[7]], [mini[2], mini[3]], get_action = False)
+                y_train.append(mini[5] + gamma*value_)
+
+            action_0 = 0.1 * (-1 + (mini[4] - 1)//3)
+            action_1 = 0.1 * (-1 + (mini[4] - 1) %3)
+            x_train.append([mini[0], mini[1], mini[2], mini[3], action_0, action_1])
+
+        DQL.fit(np.array(x_train), np.array(y_train), batch_size = 64, epochs = 100)
+        DQL.save_weights("./predict_model")
+        np.save('replay_memory', replay_memory)
+
+        if (e%3 == 0):
+            DQL_.load_weights("./predict_model")
+            DQL_.save_weights("./target_model")
         
         end = time.time()
         print('Episode:{0:d}'.format(e),
               '    time:{0:.4f}'.format(end-start),
               '    reward:{0:4f}'.format(reward),
               )
-
-        # reset_pos()
-        # print(reward_list)
-        plt.plot()
-        plt.savefig('./deep_img' + str(e) + '.png')
-
-        if (e%3 == 0):
-            DQL_.load_weights("./predict_model")
-            DQL_.save_weights("./target_model")
 
 
 if __name__ == '__main__':
