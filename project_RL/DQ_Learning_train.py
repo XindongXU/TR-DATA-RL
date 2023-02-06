@@ -30,7 +30,7 @@ for step in range(33):
         if mini[5] >= -10:
             y_train.append(mini[5])
         else:
-            value_ = model_.get_best([mini[6], mini[7]], [mini[2], mini[3]], get_action = False)
+            value_ = model_.get_best([mini[6], mini[7]], [mini[2], mini[3]], get_action = False, is_training = True)
             y_train.append(mini[5] + 0.99*value_)
             
         action_0 = 0.1 * (-1 + (mini[4] - 1)//3)

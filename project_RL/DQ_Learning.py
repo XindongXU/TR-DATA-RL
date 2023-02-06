@@ -131,11 +131,11 @@ class DQNet(tf.keras.Model):
         
         x = self.bn1(inputs)
         
-        x = self.dense1(x)
-        x = self.bn2(x)
+        # x = self.dense1(x)
+        # x = self.bn2(x)
         
-#         x = self.dense2(x)
-#         x = self.bn3(x)
+        x = self.dense2(x)
+        x = self.bn3(x)
         
         x = self.dense3(x)
         x = self.bn4(x)
@@ -144,7 +144,7 @@ class DQNet(tf.keras.Model):
         output = x
         return output
     
-    def get_best(self, state_current, target_pos, get_action = True):
+    def get_best(self, state_current, target_pos, get_action, is_training):
         """
         Fonction that gives the best action given the current state situation
         and target position, which maximize the Q state-action value.
@@ -161,7 +161,6 @@ class DQNet(tf.keras.Model):
         """
         global servo_0_target
         global servo_1_target
-
         action = 5
         action_0 = 0.1 * (-1 + (action - 1)//3)
         action_1 = 0.1 * (-1 + (action - 1) %3)
@@ -170,18 +169,29 @@ class DQNet(tf.keras.Model):
         value = self.call(inputs = inputs).numpy()[0][0]
         # print("debug: best q value is: ", value)
         
-        for i in range(9):
-            # i varies from 0 to 8, action of i+1 varies from 1 to 9
-            action_0 = 0.1 * (-1 + (i + 1 - 1)//3)
-            action_1 = 0.1 * (-1 + (i + 1 - 1) %3)
-            if (servo_0_target + action_0) <= 180 and (servo_0_target + action_0) >= 0 and (servo_1_target + action_1) <= 180 and (servo_1_target + action_1) >= 0 :
-                inputs = tf.constant([[state_current[0], state_current[1], 
-                                target_pos[0], target_pos[1], action_0, action_1]])
+        if is_training:
+            for i in range(9):
+                # i varies from 0 to 7, action of i+2 varies from 2 to 9
+                action_0 = 0.1 * (-1 + (i + 1 - 1)//3)
+                action_1 = 0.1 * (-1 + (i + 1 - 1) %3)
+                inputs = tf.constant([[state_current[0], state_current[1], target_pos[0], target_pos[1], action_0, action_1]])
                 value_new = self.call(inputs = inputs).numpy()[0][0]
                 if value <= value_new:
                     value = value_new
                     action = i + 1
-        return action if get_action else value
+            return action if get_action else value
+        else:
+            for i in range(9):
+                # i varies from 0 to 7, action of i+2 varies from 2 to 9
+                action_0 = 0.1 * (-1 + (i + 1 - 1)//3)
+                action_1 = 0.1 * (-1 + (i + 1 - 1) %3)
+                if (servo_0_target + action_0) <= 180 and (servo_0_target + action_0) >= 0 and (servo_1_target + action_1) <= 180 and (servo_1_target + action_1) >= 0 :
+                    inputs = tf.constant([[state_current[0], state_current[1], target_pos[0], target_pos[1], action_0, action_1]])
+                    value_new = self.call(inputs = inputs).numpy()[0][0]
+                    if value <= value_new:
+                        value = value_new
+                        action = i + 1
+            return action if get_action else value
 
 
 class environment:
@@ -260,7 +270,12 @@ class LearningRateReducerCb(tf.keras.callbacks.Callback):
             new_lr = 0.001
             self.model.optimizer.lr.assign(new_lr)
             print("\nStep: {}. Reducing Learning Rate from {} to {}".format(self.step, old_lr, new_lr))
-
+        
+#     def on_epoch_end(self, epoch, logs={}):
+#         old_lr = self.model.optimizer.lr.read_value()
+#         new_lr = old_lr * 0.996
+#         print("\nEpoch: {}. Reducing Learning Rate from {} to {}".format(epoch, old_lr, new_lr))
+#         self.model.optimizer.lr.assign(new_lr)
 
 def save_memory(replay_memory, memory_size, state_current, target_pos, action_current, reward_current, state_next):
     """
@@ -346,7 +361,7 @@ def train(episode, target_pos_list):
             if np.random.random() <= epsilon:
                 action = np.random.randint(1, 10)
             else:
-                action = DQL.get_best(s_c, target_pos, get_action = True)
+                action = DQL.get_best(s_c, target_pos, get_action = True, is_training = False)
             
             s_n, reward = envir.run_one_step(s_c, target_pos, action)
             save_memory(replay_memory, memory_size, s_c, target_pos, action, reward, s_n)
@@ -367,7 +382,7 @@ def train(episode, target_pos_list):
                 if mini[5] >= -10:
                     y_train.append(mini[5])
                 else:
-                    value_ = DQL_.get_best([mini[6], mini[7]], [mini[2], mini[3]], get_action = False)
+                    value_ = DQL_.get_best([mini[6], mini[7]], [mini[2], mini[3]], get_action = False, is_training = True)
                     y_train.append(mini[5] + gamma*value_)
 
                 action_0 = 0.1 * (-1 + (mini[4] - 1)//3)
@@ -380,6 +395,7 @@ def train(episode, target_pos_list):
             if (e%3 == 0):
                 DQL_.load_weights("./predict_model")
                 DQL_.save_weights("./target_model")
+        # update parameters in deep q learning network at end of every episode
         
         end = time.time()
         print('Episode:{0:d}'.format(e),
