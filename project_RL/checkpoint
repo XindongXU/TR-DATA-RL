@@ -1,2 +1,2 @@
-model_checkpoint_path: "predict_model_weekend"
-all_model_checkpoint_paths: "predict_model_weekend"
+model_checkpoint_path: "predict_model_monday"
+all_model_checkpoint_paths: "predict_model_monday"

@@ -320,12 +320,12 @@ def GetMinibatch(minibatch_size, replay_memory):
     return minibatch
 
 
-def train(episode, target_pos_list):
+def main(episode, target_pos_list):
     
     replay_memory = []
     memory_size = 10000
     minibatch_size = 1000
-    gamma = 0.99
+    gamma = 0.9
     
     envir = environment()
     DQL = DQNet()
@@ -409,4 +409,4 @@ if __name__ == '__main__':
     with open('./target_pos_list.npy', 'rb') as f:
         target_pos_list = np.load(f)
 
-    train(episode = 1000, target_pos_list = target_pos_list)
+    main(episode = 30, target_pos_list = target_pos_list)
