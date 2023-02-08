@@ -246,9 +246,7 @@ class environment:
         state_next = [top_x, top_y]
         # print("target position =", self.__decode(self.target_pos), self.target_pos)
         # print("ourarm position =", self.__decode(s_t), s_t)
-
         reward_current = eval_reward(state_next, target_pos)
-        print("current reward  =", reward_current)
 
         return state_next, reward_current
 
@@ -320,7 +318,7 @@ def GetMinibatch(minibatch_size, replay_memory):
     return minibatch
 
 
-def main(episode, target_pos_list):
+def main(target_pos_list):
     
     replay_memory = []
     memory_size = 10000
@@ -329,22 +327,22 @@ def main(episode, target_pos_list):
     
     envir = environment()
     DQL = DQNet()
-    DQL.save_weights("./predict_model")
+    DQL.compile(optimizer = tf.keras.optimizers.Adam(learning_rate = 0.001),
+                loss = tf.keras.losses.MeanSquaredError(), metrics = 'mae')
     
     DQL_ = DQNet()
-    DQL_.load_weights("./predict_model")
-    
-    DQL.compile(optimizer = tf.keras.optimizers.Adam(learning_rate = 0.001),
-            loss = tf.keras.losses.MeanSquaredError(), metrics = 'mae')
     DQL_.compile(optimizer = tf.keras.optimizers.Adam(learning_rate = 0.001),
-            loss = tf.keras.losses.MeanSquaredError(), metrics = 'mae')
+                 loss = tf.keras.losses.MeanSquaredError(), metrics = 'mae')
 
-    
-    for e in range(episode):
+    mae_liste  = []
+    mae_liste_ = []
+    loss_liste = []
+
+    for e in range(50):
         target_idx = np.random.randint(0, len(target_pos_list))
         target_pos = [target_pos_list[target_idx][0], target_pos_list[target_idx][1]]
         start = time.time()
-        epsilon = 10 / (e + 1)
+        epsilon = 20 / (e + 1)
         step_num = 100
 
         # detection of initial state, randomize first action, memorize first sequence
@@ -372,7 +370,7 @@ def main(episode, target_pos_list):
         np.save('replay_memory', replay_memory)
 
         # update parameters in deep q learning network at end of every episode
-        if len(replay_memory) >= 900:
+        if len(replay_memory) >= 1100:
             x_train, y_train = [], []
             minibatch = GetMinibatch(minibatch_size, replay_memory)
             for (i, mini) in enumerate(minibatch):
@@ -389,19 +387,32 @@ def main(episode, target_pos_list):
                 action_1 = 0.1 * (-1 + (mini[4] - 1) %3)
                 x_train.append([mini[0], mini[1], mini[2], mini[3], action_0, action_1])
 
-            DQL.fit(np.array(x_train), np.array(y_train), batch_size = 64, epochs = 100)
-            DQL.save_weights("./predict_model")
+            history = DQL.fit(np.array(x_train), np.array(y_train), batch_size = 64, epochs = 100)
+            mae_liste.append(history.history['mae'])
+            mae_liste_.append(history.history['mae']/np.mean(y_train))
+            loss_liste.append(history.history['loss']/(np.mean(y_train)**2))
+            DQL.save_weights("/home/mig5/Desktop/TR_DATA_RL/project_RL/predict_model_ok")
             
-            if (e%3 == 0):
-                DQL_.load_weights("./predict_model")
-                DQL_.save_weights("./target_model")
-        # update parameters in deep q learning network at end of every episode
-        
+            print(e)
+            if ((e-10)%4 == 3 and e <= 18):
+                print("______________________target network update______________________")
+                model_ = DQNet()
+                model_.compile(optimizer = tf.keras.optimizers.Adam(learning_rate = 0.001), loss = tf.keras.losses.MeanSquaredError(), metrics = 'mae')
+                model_.load_weights("/home/mig5/Desktop/TR_DATA_RL/project_RL/predict_model_ok")
+            if (e%2 == 1 and e >= 19):
+                print("______________________target network update______________________")
+                model_ = DQNet()
+                model_.compile(optimizer = tf.keras.optimizers.Adam(learning_rate = 0.001), loss = tf.keras.losses.MeanSquaredError(), metrics = 'mae')
+                model_.load_weights("/home/mig5/Desktop/TR_DATA_RL/project_RL/predict_model_ok")
+
         end = time.time()
         print('Episode:{0:d}'.format(e),
               '    time:{0:.4f}'.format(end-start),
               '    reward:{0:4f}'.format(reward),
               )
+        np.save('mae_liste_ok', np.array(mae_liste))
+        np.save('mae_liste__ok', np.array(mae_liste_))
+        np.save('loss_liste_ok', np.array(loss_liste))
 
 
 if __name__ == '__main__':
@@ -409,4 +420,6 @@ if __name__ == '__main__':
     with open('./target_pos_list.npy', 'rb') as f:
         target_pos_list = np.load(f)
 
-    main(episode = 30, target_pos_list = target_pos_list)
+    main(target_pos_list = target_pos_list)
+
+    

@@ -1,2 +1,2 @@
-model_checkpoint_path: "target_model"
-all_model_checkpoint_paths: "target_model"
+model_checkpoint_path: "predict_model_ok"
+all_model_checkpoint_paths: "predict_model_ok"

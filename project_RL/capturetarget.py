@@ -4,6 +4,7 @@ from sklearn import linear_model
 from threading import Thread
 from time import sleep, time
 import serial
+import matplotlib.pyplot as plt
 
 target_pos_list = []
 lower_green = np.array([45,70,60])
@@ -98,3 +99,16 @@ for actions in actions_liste:
 #        break
 # cap.release()
 # cv2.destroyAllWindows()
+
+with open('./target_pos_list.npy', 'rb') as f:
+    target_pos_list = np.load(f)
+    
+print(np.shape(target_pos_list))
+plt.figure(figsize = (8, 6))
+plt.xlim((0, 640))
+plt.ylim((-480, 50))
+plt.xlabel('x')
+plt.ylabel('y')
+plt.title('green point position')
+plt.scatter(target_pos_list[:, 1], -target_pos_list[:, 0], s = 20, marker = 'x')
+plt.show()
