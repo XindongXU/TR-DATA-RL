@@ -66,18 +66,25 @@ actions_liste = [[0, 0], [0, 10], [0, 20], [0, 30], [0, 40], [0, 50], [0, 60], [
             [80, 10], [70, 80], [60, 40], [50, 60], [40, 80], [30, 40], [20, 70], [10, 40], [0, 100]]
 
 
+def random_target():
+    value = np.random.randint(0, 19)
+    return value
+
+
 speed = 60
 ser = serial.Serial('/dev/ttyACM0')
 
 cap = cv2.VideoCapture(0)
-for actions in actions_liste:
-
-    servo_0_target = actions[0]
-    servo_1_target = actions[1]
+# for actions in actions_liste:
+for i in range(100):
+    servo_0_target = random_target()*10
+    servo_1_target = random_target()*10
+    # servo_0_target = actions[0]
+    # servo_1_target = actions[1]
 
     print(f'\r {servo_0_target:.2f} {servo_1_target:.2f}', end='')
     ser.write(f'{int(servo_0_target) << 1}\n{(int(servo_1_target) << 1) + 1}\n'.encode())
-    sleep(1)
+    sleep(2)
     ret, frame = cap.read()
     frame = cv2.resize(frame, None, fx=1, fy=1, interpolation=cv2.INTER_AREA)
     # cv2.imshow('frame', frame)

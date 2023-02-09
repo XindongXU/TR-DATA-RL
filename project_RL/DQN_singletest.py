@@ -31,7 +31,7 @@ reset_pos()
 
 model = DQNet()
 envir = environment()
-model.load_weights("/home/mig5/Desktop/TR_DATA_RL/project_RL/predict_model_jeudi")
+model.load_weights("/home/mig5/Desktop/TR_DATA_RL/project_RL/predict_model_friday")
 
 mask = mask_detect()
 s_c = top_detect(mask)

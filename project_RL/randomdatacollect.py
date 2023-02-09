@@ -192,7 +192,6 @@ if __name__ == '__main__':
     plt.scatter(Servo_t[0], Servo_t[1], s = 20, marker = 'x')
     plt.show()
 
-    with open('./data.npy', 'wb') as f:
-        np.save(f, Servo_t)
-        np.save(f, A_t)
+    with open('./s_t.npy', 'wb') as f:
         np.save(f, s_t)
+    print(s_t)
