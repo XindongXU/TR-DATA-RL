@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import serial
 import time
+import numpy as np
 
 def reset_pos():
     servo_0_target = 0
@@ -13,3 +14,7 @@ def reset_pos():
 
 if __name__ == '__main__':
     reset_pos()
+    with open('./target_pos_list.npy', 'rb') as f:
+        target_pos_list = np.load(f)
+
+    print(target_pos_list)

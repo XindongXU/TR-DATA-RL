@@ -237,7 +237,7 @@ class environment:
         print(f'\r {servo_0_target:.2f} {servo_1_target:.2f}')
         ser.write(f'{int(servo_0_target) << 1}\n{(int(servo_1_target) << 1) + 1}\n'.encode())
         # time.sleep(max(self.servo_0_target, self.servo_1_target)/90)
-        time.sleep(0.4)
+        time.sleep(0.5)
 
         ## detection of top point at next time step
         mask = mask_detect()
@@ -391,28 +391,28 @@ def main(target_pos_list):
             mae_liste.append(history.history['mae'])
             mae_liste_.append(history.history['mae']/np.mean(y_train))
             loss_liste.append(history.history['loss']/(np.mean(y_train)**2))
-            DQL.save_weights("/home/mig5/Desktop/TR_DATA_RL/project_RL/predict_model_jeudi")
+            DQL.save_weights("/home/mig5/Desktop/TR_DATA_RL/project_RL/predict_model_friday")
             
             print(e)
             if ((e-10)%4 == 3 and e <= 18):
                 print("______________________target network update______________________")
                 DQL_ = DQNet()
                 DQL_.compile(optimizer = tf.keras.optimizers.Adam(learning_rate = 0.001), loss = tf.keras.losses.MeanSquaredError(), metrics = 'mae')
-                DQL_.load_weights("/home/mig5/Desktop/TR_DATA_RL/project_RL/predict_model_jeudi")
+                DQL_.load_weights("/home/mig5/Desktop/TR_DATA_RL/project_RL/predict_model_friday")
             if (e%2 == 1 and e >= 19):
                 print("______________________target network update______________________")
                 DQL_ = DQNet()
                 DQL_.compile(optimizer = tf.keras.optimizers.Adam(learning_rate = 0.001), loss = tf.keras.losses.MeanSquaredError(), metrics = 'mae')
-                DQL_.load_weights("/home/mig5/Desktop/TR_DATA_RL/project_RL/predict_model_jeudi")
+                DQL_.load_weights("/home/mig5/Desktop/TR_DATA_RL/project_RL/predict_model_friday")
 
         end = time.time()
         print('Episode:{0:d}'.format(e),
               '    time:{0:.4f}'.format(end-start),
               '    reward:{0:4f}'.format(reward),
               )
-        np.save('mae_liste_jeudi', np.array(mae_liste))
-        np.save('mae_liste__jeudi', np.array(mae_liste_))
-        np.save('loss_liste_jeudi', np.array(loss_liste))
+        np.save('mae_liste_friday', np.array(mae_liste))
+        np.save('mae_liste__friday', np.array(mae_liste_))
+        np.save('loss_liste_friday', np.array(loss_liste))
 
 
 if __name__ == '__main__':

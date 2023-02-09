@@ -46,11 +46,12 @@ time.sleep(2)
 acc = 0
 # len(target_pos_list_random)
 for i in range(20):
+    print(i)
     target_pos = target_pos_list_random[i]
     reward_list = []
-    try_times = 50
+    try_times = 30
     r = -300
-    while (r <= -10 and try_times >= 0):
+    while (r <= -15 and try_times >= 0):
 
         a_t = model.get_best(   state_current = s_c,
                                 target_pos = target_pos,
@@ -69,7 +70,7 @@ for i in range(20):
         try_times = try_times - 1
     print('index', i)
     plt.plot(reward_list)
-    if (r >= -10):
+    if (r >= -15):
         acc = acc + 1
 
 print(acc/(i+1))

@@ -75,16 +75,17 @@ speed = 60
 ser = serial.Serial('/dev/ttyACM0')
 
 cap = cv2.VideoCapture(0)
-# for actions in actions_liste:
-for i in range(100):
-    servo_0_target = random_target()*10
-    servo_1_target = random_target()*10
-    # servo_0_target = actions[0]
-    # servo_1_target = actions[1]
+for actions in actions_liste:
+# for i in range(100):
+
+    # servo_0_target = random_target()*10
+    # servo_1_target = random_target()*10
+    servo_0_target = actions[0]
+    servo_1_target = actions[1]
 
     print(f'\r {servo_0_target:.2f} {servo_1_target:.2f}', end='')
     ser.write(f'{int(servo_0_target) << 1}\n{(int(servo_1_target) << 1) + 1}\n'.encode())
-    sleep(2)
+    sleep(1)
     ret, frame = cap.read()
     frame = cv2.resize(frame, None, fx=1, fy=1, interpolation=cv2.INTER_AREA)
     # cv2.imshow('frame', frame)
@@ -106,8 +107,8 @@ for i in range(100):
     pointmask[top0, top1, 2] = 255
     # cv2.imshow('green point', pointmask)
 
-    with open('./target_pos_list.npy', 'wb') as f:
-        np.save(f, np.array(target_pos_list))
+    # with open('./target_pos_list.npy', 'wb') as f:
+    #     np.save(f, np.array(target_pos_list))
 
 #     # press escape to exit
 #     if (cv2.waitKey(30) == 27):
