@@ -161,7 +161,7 @@ class DQNet(tf.keras.Model):
         """
         global servo_0_target
         global servo_1_target
-        action = 5
+        action = 9
         action_0 = 0.1 * (-1 + (action - 1)//3)
         action_1 = 0.1 * (-1 + (action - 1) %3)
         inputs = tf.constant([[state_current[0], state_current[1], 
@@ -181,7 +181,7 @@ class DQNet(tf.keras.Model):
                     action = i + 1
             return action if get_action else value
         else:
-            for i in range(9):
+            for i in [0, 1, 2, 3, 5, 6, 7, 8]:
                 # i varies from 0 to 7, action of i+2 varies from 2 to 9
                 action_0 = 0.1 * (-1 + (i + 1 - 1)//3)
                 action_1 = 0.1 * (-1 + (i + 1 - 1) %3)
@@ -237,7 +237,7 @@ class environment:
         print(f'\r {servo_0_target:.2f} {servo_1_target:.2f}')
         ser.write(f'{int(servo_0_target) << 1}\n{(int(servo_1_target) << 1) + 1}\n'.encode())
         # time.sleep(max(self.servo_0_target, self.servo_1_target)/90)
-        time.sleep(0.2)
+        time.sleep(0.4)
 
         ## detection of top point at next time step
         mask = mask_detect()
@@ -342,7 +342,7 @@ def main(target_pos_list):
         target_idx = np.random.randint(0, len(target_pos_list))
         target_pos = [target_pos_list[target_idx][0], target_pos_list[target_idx][1]]
         start = time.time()
-        epsilon = 20 / (e + 1)
+        epsilon = 30 / (e + 1)
         step_num = 100
 
         # detection of initial state, randomize first action, memorize first sequence
@@ -377,7 +377,7 @@ def main(target_pos_list):
                 # one example of mini with 8 elements: 
                 # [state_current[0], state_current[1], target_pos[0], target_pos[1], 
                 # action_current, reward_current, state_next[0], state_next[1]]
-                if mini[5] >= -10:
+                if mini[5] >= -20:
                     y_train.append(mini[5])
                 else:
                     value_ = DQL_.get_best([mini[6], mini[7]], [mini[2], mini[3]], get_action = False, is_training = True)
@@ -391,28 +391,28 @@ def main(target_pos_list):
             mae_liste.append(history.history['mae'])
             mae_liste_.append(history.history['mae']/np.mean(y_train))
             loss_liste.append(history.history['loss']/(np.mean(y_train)**2))
-            DQL.save_weights("/home/mig5/Desktop/TR_DATA_RL/project_RL/predict_model_ok")
+            DQL.save_weights("/home/mig5/Desktop/TR_DATA_RL/project_RL/predict_model_jeudi")
             
             print(e)
             if ((e-10)%4 == 3 and e <= 18):
                 print("______________________target network update______________________")
-                model_ = DQNet()
-                model_.compile(optimizer = tf.keras.optimizers.Adam(learning_rate = 0.001), loss = tf.keras.losses.MeanSquaredError(), metrics = 'mae')
-                model_.load_weights("/home/mig5/Desktop/TR_DATA_RL/project_RL/predict_model_ok")
+                DQL_ = DQNet()
+                DQL_.compile(optimizer = tf.keras.optimizers.Adam(learning_rate = 0.001), loss = tf.keras.losses.MeanSquaredError(), metrics = 'mae')
+                DQL_.load_weights("/home/mig5/Desktop/TR_DATA_RL/project_RL/predict_model_jeudi")
             if (e%2 == 1 and e >= 19):
                 print("______________________target network update______________________")
-                model_ = DQNet()
-                model_.compile(optimizer = tf.keras.optimizers.Adam(learning_rate = 0.001), loss = tf.keras.losses.MeanSquaredError(), metrics = 'mae')
-                model_.load_weights("/home/mig5/Desktop/TR_DATA_RL/project_RL/predict_model_ok")
+                DQL_ = DQNet()
+                DQL_.compile(optimizer = tf.keras.optimizers.Adam(learning_rate = 0.001), loss = tf.keras.losses.MeanSquaredError(), metrics = 'mae')
+                DQL_.load_weights("/home/mig5/Desktop/TR_DATA_RL/project_RL/predict_model_jeudi")
 
         end = time.time()
         print('Episode:{0:d}'.format(e),
               '    time:{0:.4f}'.format(end-start),
               '    reward:{0:4f}'.format(reward),
               )
-        np.save('mae_liste_ok', np.array(mae_liste))
-        np.save('mae_liste__ok', np.array(mae_liste_))
-        np.save('loss_liste_ok', np.array(loss_liste))
+        np.save('mae_liste_jeudi', np.array(mae_liste))
+        np.save('mae_liste__jeudi', np.array(mae_liste_))
+        np.save('loss_liste_jeudi', np.array(loss_liste))
 
 
 if __name__ == '__main__':
@@ -421,5 +421,3 @@ if __name__ == '__main__':
         target_pos_list = np.load(f)
 
     main(target_pos_list = target_pos_list)
-
-    
